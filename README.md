@@ -1,7 +1,7 @@
 # mugrem
 
 This is just an experiment: I want to embed higher dimensional graphs into
-lower dimension. E.g. using 3d layout, embed graph into 2d and user color as
+lower dimension. E.g. using 3d layout, embed graph into 2d and use color as
 third dimension (or time)
 
 # install
