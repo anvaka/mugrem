@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "ngraph.forcelayout3d": "0.0.12",
-    "ngraph.forcelayout4d": "0.0.1",
+    "ngraph.forcelayout4d": "0.1.0",
     "ngraph.generators": "0.0.15",
     "ngraph.pixel": "^0.1.9",
     "query-string": "^1.0.0"
