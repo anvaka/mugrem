@@ -1,9 +1,13 @@
 var query = require('query-string').parse(window.location.search.substring(1));
-var graph = getGraphFromQueryString(query);
+var layout4 = require('./lib/pseudo4dlayout.js');
+var layout3 = require('./lib/pseudo3dlayout.js');
+var layoutFactory = query.dim === '4' ? layout4 : layout3;
 
+var graph = getGraphFromQueryString(query);
 var renderer = require('ngraph.pixel')(graph, {
-  createLayout: require('./lib/pseudo3dlayout.js')
+  createLayout: layoutFactory
 });
+
 var layout = renderer.layout();
 
 renderer.beforeFrame(setNodeColors);
