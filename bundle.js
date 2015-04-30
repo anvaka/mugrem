@@ -1,12 +1,17 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 var query = require('query-string').parse(window.location.search.substring(1));
 var layout4 = require('./lib/pseudo4dlayout.js');
-var layout3 = require('./lib/pseudo3dlayout.js');
-var layoutFactory = query.dim === '4' ? layout4 : layout3;
 
 var graph = getGraphFromQueryString(query);
+var dim = parseInt(query.dim, 10);
+if (isNaN(dim) || dim < 2) {
+  dim = 3;
+}
 var renderer = require('ngraph.pixel')(graph, {
-  createLayout: layoutFactory
+  createLayout: layout4,
+  physics: {
+    dimension: dim
+  }
 });
 
 var layout = renderer.layout();
@@ -32,65 +37,9 @@ function getNumber(string, defaultValue) {
   return (typeof number === 'number') && !isNaN(number) ? number : (defaultValue || 10);
 }
 
-},{"./lib/pseudo3dlayout.js":2,"./lib/pseudo4dlayout.js":3,"ngraph.generators":59,"ngraph.pixel":63,"query-string":108}],2:[function(require,module,exports){
+},{"./lib/pseudo4dlayout.js":2,"ngraph.generators":31,"ngraph.pixel":35,"query-string":80}],2:[function(require,module,exports){
 module.exports = createLayout;
-var layout3d = require('ngraph.forcelayout3d');
-
-function createLayout(graph, options) {
-  var layout = layout3d(graph, options.physics);
-  var positions = Object.create(null);
-  var minZ = Number.POSITIVE_INFINITY, maxZ = Number.NEGATIVE_INFINITY;
-  var api = {
-    step: step,
-    getNodePosition: getNodePosition,
-    getNodeColor: getNodeColor
-  };
-  updatePositions();
-
-  return api;
-
-  function step() {
-    var done = layout.step();
-    updatePositions();
-    return done;
-  }
-
-  function getNodePosition(nodeId) {
-    return positions[nodeId];
-  }
-
-
-  function updatePositions() {
-    minZ = Number.POSITIVE_INFINITY;
-    maxZ = Number.NEGATIVE_INFINITY;
-    graph.forEachNode(updateNodePosition);
-  }
-
-  function updateNodePosition(node) {
-    // I know this is not efficient at all.
-    var pos = layout.getNodePosition(node.id);
-    var cachedPos = positions[node.id];
-    if (!cachedPos) {
-      cachedPos = positions[node.id] = { x: pos.x, y: pos.y, z: 0 };
-    } else {
-      cachedPos.x = pos.x;
-      cachedPos.y = pos.y;
-    }
-    if (pos.z < minZ) minZ = pos.z;
-    if (pos.z > maxZ) maxZ = pos.z;
-  }
-
-  function getNodeColor(nodeId) {
-    var pos = layout.getNodePosition(nodeId);
-    var color = Math.round((pos.z - minZ) * 255/(maxZ - minZ));
-    var finalColor = (color << 16) | (color << 8) | color;
-    return finalColor;
-  }
-}
-
-},{"ngraph.forcelayout3d":4}],3:[function(require,module,exports){
-module.exports = createLayout;
-var layout4d = require('ngraph.forcelayout4d');
+var layout4d = require('ngraph.forcelayout.nd');
 
 function createLayout(graph, options) {
   var layout = layout4d(graph, options.physics);
@@ -127,30 +76,27 @@ function createLayout(graph, options) {
     var pos = layout.getNodePosition(node.id);
     var cachedPos = positions[node.id];
     if (!cachedPos) {
-      cachedPos = positions[node.id] = { x: pos.x, y: pos.y, z: pos.t };
+      cachedPos = positions[node.id] = { x: pos[0], y: pos[1], z: pos[2] };
     } else {
-      cachedPos.x = pos.x;
-      cachedPos.y = pos.y;
-      cachedPos.z = pos.t;
+      cachedPos.x = pos[0];
+      cachedPos.y = pos[1];
+      cachedPos.z = pos[2];
     }
-    if (pos.z < minT) minT = pos.z;
-    if (pos.z > maxT) maxT = pos.z;
+    if (pos[3] < minT) minT = pos[3];
+    if (pos[3] > maxT) maxT = pos[3];
   }
 
   function getNodeColor(nodeId) {
     var pos = layout.getNodePosition(nodeId);
-    var color = Math.round((pos.z - minT) * 255/(maxT - minT));
+    var color = Math.round((pos[3] - minT) * 255/(maxT - minT));
     var finalColor = (color << 16) | (color << 8) | color;
     return finalColor;
   }
 }
 
-},{"ngraph.forcelayout4d":30}],4:[function(require,module,exports){
+},{"ngraph.forcelayout.nd":3}],3:[function(require,module,exports){
 /**
- * This module provides all required forces to regular ngraph.physics.simulator
- * to make it 3D simulator. Ideally ngraph.physics.simulator should operate
- * with vectors, but on practices that showed performance decrease... Maybe
- * I was doing it wrong, will see if I can refactor/throw away this module.
+ * N-dimensional force based graph layout
  */
 module.exports = createLayout;
 createLayout.get2dLayout = require('ngraph.forcelayout');
@@ -158,21 +104,30 @@ createLayout.get2dLayout = require('ngraph.forcelayout');
 function createLayout(graph, physicsSettings) {
   var merge = require('ngraph.merge');
   physicsSettings = merge(physicsSettings, {
-        createQuadTree: require('ngraph.quadtreebh3d'),
-        createBounds: require('./lib/bounds'),
-        createDragForce: require('./lib/dragForce'),
-        createSpringForce: require('./lib/springForce'),
-        integrator: require('./lib/eulerIntegrator'),
-        createBody: require('./lib/createBody')
-      });
+    dimension: 2,
+    createQuadTree: require('./lib/orthantTree/index.js'),
+    createBounds: require('./lib/bounds'),
+    createDragForce: require('./lib/dragForce'),
+    createSpringForce: require('./lib/springForce'),
+    integrator: require('./lib/eulerIntegrator'),
+    createBody: require('./lib/createBody')
+  });
 
   return createLayout.get2dLayout(graph, physicsSettings);
 }
 
-},{"./lib/bounds":5,"./lib/createBody":6,"./lib/dragForce":7,"./lib/eulerIntegrator":8,"./lib/springForce":9,"ngraph.forcelayout":11,"ngraph.merge":23,"ngraph.quadtreebh3d":25}],5:[function(require,module,exports){
-module.exports = function (bodies, settings) {
+},{"./lib/bounds":4,"./lib/createBody":5,"./lib/dragForce":6,"./lib/eulerIntegrator":7,"./lib/orthantTree/index.js":8,"./lib/springForce":13,"ngraph.forcelayout":16,"ngraph.merge":29}],4:[function(require,module,exports){
+var Vector = require('./vector.js');
+
+module.exports = bounds;
+
+function bounds(bodies, settings) {
   var random = require('ngraph.random').random(42);
-  var boundingBox =  { x1: 0, y1: 0, z1: 0, x2: 0, y2: 0, z2: 0 };
+  var dim = settings.dimension;
+  var boundingBox =  {
+    left: new Vector(dim),
+    right: new Vector(dim)
+  };
 
   return {
     box: boundingBox,
@@ -180,38 +135,31 @@ module.exports = function (bodies, settings) {
     update: updateBoundingBox,
 
     reset : function () {
-      boundingBox.x1 = boundingBox.y1 = 0;
-      boundingBox.x2 = boundingBox.y2 = 0;
-      boundingBox.z1 = boundingBox.z2 = 0;
+      boundingBox.left.reset();
+      boundingBox.right.reset();
     },
 
     getBestNewPosition: function (neighbors) {
       var graphRect = boundingBox;
+      var i;
 
-      var baseX = 0, baseY = 0, baseZ = 0;
+      var base = new Vector(dim);
 
       if (neighbors.length) {
-        for (var i = 0; i < neighbors.length; ++i) {
-          baseX += neighbors[i].pos.x;
-          baseY += neighbors[i].pos.y;
-          baseZ += neighbors[i].pos.z;
+        for (i = 0; i < neighbors.length; ++i) {
+          base.add(neighbors[i].pos);
         }
-
-        baseX /= neighbors.length;
-        baseY /= neighbors.length;
-        baseZ /= neighbors.length;
+        base.divScalar(neighbors.length);
       } else {
-        baseX = (graphRect.x1 + graphRect.x2) / 2;
-        baseY = (graphRect.y1 + graphRect.y2) / 2;
-        baseZ = (graphRect.z1 + graphRect.z2) / 2;
+        base = Vector.add(graphRect.left, graphRect.right);
+        base.divScalar(2);
       }
 
       var springLength = settings.springLength;
-      return {
-        x: baseX + random.next(springLength) - springLength / 2,
-        y: baseY + random.next(springLength) - springLength / 2,
-        z: baseZ + random.next(springLength) - springLength / 2
-      };
+      for (i = 0; i < dim; ++i) {
+        base[i] += random.next(springLength) - springLength / 2;
+      }
+      return base;
     }
   };
 
@@ -219,65 +167,57 @@ module.exports = function (bodies, settings) {
     var i = bodies.length;
     if (i === 0) { return; } // don't have to wory here.
 
-    var x1 = Number.MAX_VALUE,
-        y1 = Number.MAX_VALUE,
-        z1 = Number.MAX_VALUE,
-        x2 = Number.MIN_VALUE,
-        y2 = Number.MIN_VALUE,
-        z2 = Number.MIN_VALUE;
+    var left = new Vector(dim);
+    var right = new Vector(dim);
+    left.addScalar(Number.POSITIVE_INFINITY);
+    right.addScalar(Number.NEGATIVE_INFINITY);
 
     while(i--) {
       // this is O(n), could it be done faster with quadtree?
       // how about pinned nodes?
       var body = bodies[i];
       if (body.isPinned) {
-        body.pos.x = body.prevPos.x;
-        body.pos.y = body.prevPos.y;
-        body.pos.z = body.prevPos.z;
+        body.pos.assign(body.prevPos);
       } else {
-        body.prevPos.x = body.pos.x;
-        body.prevPos.y = body.pos.y;
-        body.prevPos.z = body.pos.z;
+        body.prevPos.assign(body.pos);
       }
-      if (body.pos.x < x1) {
-        x1 = body.pos.x;
-      }
-      if (body.pos.x > x2) {
-        x2 = body.pos.x;
-      }
-      if (body.pos.y < y1) {
-        y1 = body.pos.y;
-      }
-      if (body.pos.y > y2) {
-        y2 = body.pos.y;
-      }
-      if (body.pos.z < z1) {
-        z1 = body.pos.z;
-      }
-      if (body.pos.z > z2) {
-        z2 = body.pos.z;
+      var pos = body.pos;
+      for (var j = 0; j < pos.length; ++j) {
+        if (pos[j] < left[j]) left[j] = pos[j];
+        if (pos[j] > right[j]) right[j] = pos[j];
       }
     }
+    boundingBox.left.assign(left);
+    boundingBox.right.assign(right);
+  }
+}
 
-    boundingBox.x1 = x1;
-    boundingBox.x2 = x2;
-    boundingBox.y1 = y1;
-    boundingBox.y2 = y2;
-    boundingBox.z1 = z1;
-    boundingBox.z2 = z2;
+},{"./vector.js":14,"ngraph.random":30}],5:[function(require,module,exports){
+var Vector = require('./vector.js');
+
+module.exports = createBody;
+
+function createBody(pos) {
+  return new Body(pos);
+}
+
+function Body(pos) {
+  this.pos = new Vector(pos);
+  this.prevPos = new Vector(pos);
+  this.force = new Vector(pos.length);
+  this.velocity = new Vector(pos.length);
+  this.mass = 1;
+}
+
+Body.prototype.setPosition = function () {
+  for (var i = 0; i < arguments.length; ++i) {
+    this.prevPos[i] = this.pos[i] = arguments[i];
   }
 };
 
-},{"ngraph.random":29}],6:[function(require,module,exports){
-var physics = require('ngraph.physics.primitives');
-
-module.exports = function(pos) {
-  return new physics.Body3d(pos);
-}
-
-},{"ngraph.physics.primitives":24}],7:[function(require,module,exports){
+},{"./vector.js":14}],6:[function(require,module,exports){
 /**
- * Represents 3d drag force, which reduces force value on each step by given
+ * Represents n-dimensional drag force, which reduces force value on each step by given
  * coefficient.
  *
  * @param {Object} options for the drag force
@@ -293,9 +233,7 @@ module.exports = function (options) {
 
   var api = {
     update : function (body) {
-      body.force.x -= options.dragCoeff * body.velocity.x;
-      body.force.y -= options.dragCoeff * body.velocity.y;
-      body.force.z -= options.dragCoeff * body.velocity.z;
+      body.force.moveByScale(-options.dragCoeff, body.velocity);
     }
   };
 
@@ -305,9 +243,9 @@ module.exports = function (options) {
   return api;
 };
 
-},{"ngraph.expose":10,"ngraph.merge":23}],8:[function(require,module,exports){
+},{"ngraph.expose":15,"ngraph.merge":29}],7:[function(require,module,exports){
 /**
- * Performs 3d forces integration, using given timestep. Uses Euler method to solve
+ * Performs forces integration, using given timestep. Uses Euler method to solve
  * differential equation (http://en.wikipedia.org/wiki/Euler_method ).
  *
  * @returns {Number} squared distance of total position updates.
@@ -316,54 +254,365 @@ module.exports = function (options) {
 module.exports = integrate;
 
 function integrate(bodies, timeStep) {
-  var dx = 0, tx = 0,
-      dy = 0, ty = 0,
-      dz = 0, tz = 0,
-      i,
-      max = bodies.length;
+  var totalMove = 0;
+  for (var i = 0; i < bodies.length; ++i) {
+    var body = bodies[i];
+    var coeff = timeStep / body.mass;
 
-  for (i = 0; i < max; ++i) {
-    var body = bodies[i],
-        coeff = timeStep / body.mass;
-
-    body.velocity.x += coeff * body.force.x;
-    body.velocity.y += coeff * body.force.y;
-    body.velocity.z += coeff * body.force.z;
-
-    var vx = body.velocity.x,
-        vy = body.velocity.y,
-        vz = body.velocity.z,
-        v = Math.sqrt(vx * vx + vy * vy + vz * vz);
-
-    if (v > 1) {
-      body.velocity.x = vx / v;
-      body.velocity.y = vy / v;
-      body.velocity.z = vz / v;
-    }
-
-    dx = timeStep * body.velocity.x;
-    dy = timeStep * body.velocity.y;
-    dz = timeStep * body.velocity.z;
-
-    body.pos.x += dx;
-    body.pos.y += dy;
-    body.pos.z += dz;
-
-    tx += Math.abs(dx); ty += Math.abs(dy); tz += Math.abs(dz);
+    body.velocity.moveByScale(coeff, body.force);
+    body.velocity.normalize();
+    totalMove += body.pos.moveByScaleAndReturnChange(timeStep, body.velocity);
   }
 
-  return (tx * tx + ty * ty + tz * tz)/bodies.length;
+  return totalMove/bodies.length;
 }
 
-},{}],9:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 /**
- * Represents 3d spring force, which updates forces acting on two bodies, conntected
- * by a spring.
+ * This is Barnes Hut simulation algorithm, generalized for n-dimensional case.
+ *
+ * http://www.cs.princeton.edu/courses/archive/fall03/cs126/assignments/barnes-hut.html
+ */
+var Vector = require('../vector.js');
+
+module.exports = function(options) {
+  options = options || {};
+  options.gravity = typeof options.gravity === 'number' ? options.gravity : -1;
+  options.theta = typeof options.theta === 'number' ? options.theta : 0.8;
+
+  // we require deterministic randomness here
+  var random = require('ngraph.random').random(1984),
+    InsertStack = require('./insertStack.js'),
+    isSamePosition = require('./isSamePosition.js');
+
+  var gravity = options.gravity,
+    dim = options.dimension,
+    updateQueue = [],
+    insertStack = new InsertStack(),
+    theta = options.theta,
+    newNode = require('./nodeFactory.js')(dim),
+
+    root = newNode(),
+    tempLeft = new Vector(dim),
+    tempRight = new Vector(dim),
+
+    // Inserts body to the tree
+    insert = function(newBody) {
+      insertStack.reset();
+      insertStack.push(root, newBody);
+
+      while (!insertStack.isEmpty()) {
+        var stackItem = insertStack.pop(),
+          node = stackItem.node,
+          body = stackItem.body;
+
+        if (!node.body) {
+          // This is internal node. Update the total mass of the node and center-of-mass.
+          var pos = body.pos;
+          node.mass += body.mass;
+          node.massVector.moveByScale(body.mass, pos);
+
+          // Recursively insert the body in the appropriate orthant.
+          // But first find the appropriate quadrant.
+          tempLeft.assign(node.left);
+          tempRight.assignMedian(node.right, node.left);
+
+          var quadIdx = 0; // Assume we are in the 0's quad.
+          for (var i = 0; i < pos.length; ++i) {
+            if (pos[i] > tempRight[i]) {
+              quadIdx += Math.pow(2, i);
+              var oldLeft = tempLeft[i];
+              tempLeft[i] = tempRight[i];
+              tempRight[i] = tempRight[i] + (tempRight[i] - oldLeft);
+            }
+          }
+
+          var child = node[quadIdx];
+          if (!child) {
+            // The node is internal but this quadrant is not taken. Add subnode to it.
+            child = newNode();
+            child.left.assign(tempLeft);
+            child.right.assign(tempRight);
+            child.body = body;
+
+            node[quadIdx] = child;
+          } else {
+            // continue searching in this quadrant.
+            insertStack.push(child, body);
+          }
+        } else {
+          // We are trying to add to the leaf node.
+          // We have to convert current leaf into internal node
+          // and continue adding two nodes.
+          var oldBody = node.body;
+          node.body = null; // internal nodes do not carry bodies
+
+          if (isSamePosition(oldBody.pos, body.pos)) {
+            // Next layout iteration should get larger bounding box in the first step and fix this
+            return;
+          }
+          // Next iteration should subdivide node further.
+          insertStack.push(node, oldBody);
+          insertStack.push(node, body);
+        }
+      }
+    },
+
+    update = function(sourceBody) {
+      var queue = updateQueue,
+        v, r, i,
+        force = new Vector(dim),
+        queueLength = 1,
+        shiftIdx = 0,
+        pushIdx = 1;
+
+      queue[0] = root;
+
+      while (queueLength) {
+        var node = queue[shiftIdx],
+          body = node.body;
+
+        queueLength -= 1;
+        shiftIdx += 1;
+        var differentBody = (body !== sourceBody);
+        if (body && differentBody) {
+          // If the current node is a leaf node (and it is not source body),
+          // calculate the force exerted by the current node on body, and add this
+          // amount to body's net force.
+          tempLeft.assignSub(body.pos, sourceBody.pos);
+          r = tempLeft.norm();
+
+          if (r === 0) {
+            // Poor man's protection against zero distance.
+            tempLeft.assignUniform((random.nextDouble() - 0.5) / 50);
+            r = tempLeft.norm();
+          }
+
+          // This is standard gravitation force calculation but we divide
+          // by r^3 to save two operations when normalizing force vector.
+          v = gravity * body.mass * sourceBody.mass / (r * r * r);
+          force.moveByScale(v, tempLeft);
+        } else if (differentBody) {
+          // Otherwise, calculate the ratio s / r,  where s is the width of the region
+          // represented by the internal node, and r is the distance between the body
+          // and the node's center-of-mass
+          tempLeft.assignWeightedDiff(node.massVector, node.mass, sourceBody.pos);
+          r = tempLeft.norm();
+
+          if (r === 0) {
+            tempLeft.assignUniform((random.nextDouble() - 0.5) / 50);
+            r = tempLeft.norm();
+          }
+
+          // If s / r < θ, treat this internal node as a single body, and calculate the
+          // force it exerts on sourceBody, and add this amount to sourceBody's net force.
+          if ((node.right[0] - node.left[0]) / r < theta) {
+            // in the if statement above we consider node's width only
+            // because the region was squarified during tree creation.
+            // Thus there is no difference between using width or height.
+            v = gravity * node.mass * sourceBody.mass / (r * r * r);
+            force.moveByScale(v, tempLeft);
+          } else {
+            // Otherwise, run the procedure recursively on each of the current node's children.
+            for (i = 0; i < node.orthants; ++i) {
+              if (node[i]) {
+                queue[pushIdx] = node[i];
+                queueLength += 1;
+                pushIdx += 1;
+              }
+            }
+          }
+        }
+      }
+      sourceBody.force.add(force);
+    },
+
+    insertBodies = function(bodies) {
+      tempLeft.assignUniform(Number.POSITIVE_INFINITY);
+      tempRight.assignUniform(Number.NEGATIVE_INFINITY);
+      var i, max = bodies.length;
+
+      // To reduce orthant tree depth we are looking for exact bounding box of all particles.
+      i = max;
+      var maxSide = 0;
+      while (i--) {
+        var pos = bodies[i].pos;
+        for (var j = 0; j < pos.length ; j++) {
+          if (pos[j] < tempLeft[j]) tempLeft[j] = pos[j];
+          if (pos[j] > tempRight[j]) tempRight[j] = pos[j];
+          var sideLength = tempRight[j] - tempLeft[j];
+          if (sideLength > maxSide) maxSide = sideLength;
+        }
+      }
+
+      newNode.reset();
+
+      root = newNode();
+      root.left.assign(tempLeft);
+      root.right.assignUniformAdd(tempLeft, maxSide);
+
+      i = max - 1;
+      if (i > 0) {
+        root.body = bodies[i];
+      }
+      while (i--) {
+        insert(bodies[i], root);
+      }
+    };
+
+  return {
+    insertBodies: insertBodies,
+    updateBodyForce: update,
+    options: function(newOptions) {
+      if (newOptions) {
+        if (typeof newOptions.gravity === 'number') {
+          gravity = newOptions.gravity;
+        }
+        if (typeof newOptions.theta === 'number') {
+          theta = newOptions.theta;
+        }
+
+        return this;
+      }
+
+      return {
+        gravity: gravity,
+        theta: theta
+      };
+    }
+  };
+};
+
+},{"../vector.js":14,"./insertStack.js":9,"./isSamePosition.js":10,"./nodeFactory.js":12,"ngraph.random":30}],9:[function(require,module,exports){
+module.exports = InsertStack;
+
+/**
+ * Our implementation of OrtantTree is non-recursive to avoid GC hit
+ * This data structure represent stack of elements
+ * which we are trying to insert into the tree.
+ */
+function InsertStack () {
+    this.stack = [];
+    this.popIdx = 0;
+}
+
+InsertStack.prototype = {
+    isEmpty: function() {
+        return this.popIdx === 0;
+    },
+    push: function (node, body) {
+        var item = this.stack[this.popIdx];
+        if (!item) {
+            // we are trying to avoid memory pressure: create new element
+            // only when absolutely necessary
+            this.stack[this.popIdx] = new InsertStackElement(node, body);
+        } else {
+            item.node = node;
+            item.body = body;
+        }
+        ++this.popIdx;
+    },
+    pop: function () {
+        if (this.popIdx > 0) {
+            return this.stack[--this.popIdx];
+        }
+    },
+    reset: function () {
+        this.popIdx = 0;
+    }
+};
+
+function InsertStackElement(node, body) {
+    this.node = node; // tree node
+    this.body = body; // physical body which needs to be inserted to node
+}
+
+},{}],10:[function(require,module,exports){
+module.exports = function isSamePosition(point1, point2) {
+  for (var i = 0; i < point1.length; ++i) {
+    if (Math.abs(point1[i] - point2[i]) > 1e-8) return false;
+  }
+  return true;
+};
+
+},{}],11:[function(require,module,exports){
+/**
+ * Internal data structure to represent 4D tree node
+ */
+var Vector = require('../vector.js');
+
+module.exports = OrthNode;
+
+function OrthNode(dim) {
+  // body stored inside this node. In quad tree only leaf nodes
+  // contain boides (by construction):
+  this.body = null;
+
+  // Initialize quads (orthtants):
+  this.orthants = Math.pow(2, dim);
+  for (var i = 0; i < this.orthants; ++i) this[i] = null;
+
+  // Total mass of current node
+  this.mass = 0;
+
+  // Center of mass coordinates
+  this.massVector = new Vector(dim);
+
+  // bounding box coordinates
+  this.left = new Vector(dim);
+  this.right = new Vector(dim);
+}
+
+OrthNode.prototype.reset = function () {
+  for (var i = 0; i < this.orthants; ++i) this[i] = null;
+  this.mass = 0;
+  this.massVector.reset();
+  this.left.reset();
+  this.right.reset();
+};
+
+},{"../vector.js":14}],12:[function(require,module,exports){
+var OrthNode = require('./node.js');
+
+module.exports = createNodeFactory;
+
+function createNodeFactory(dim) {
+  var nodesCache = [];
+  var currentInCache = 0;
+  nodeFactory.reset = reset;
+
+  return nodeFactory;
+
+  function nodeFactory() {
+    // To avoid pressure on GC we reuse nodes.
+    var node = nodesCache[currentInCache];
+    if (node) {
+      node.reset();
+    } else {
+      node = new OrthNode(dim);
+      nodesCache[currentInCache] = node;
+    }
+
+    ++currentInCache;
+    return node;
+  }
+
+  function reset() {
+    currentInCache = 0;
+  }
+}
+
+},{"./node.js":11}],13:[function(require,module,exports){
+/**
+ * Represents n-dimensional spring force, which updates forces acting on two
+ * bodies, conntected by a spring.
  *
  * @param {Object} options for the spring force
  * @param {Number=} options.springCoeff spring force coefficient.
  * @param {Number=} options.springLength desired length of a spring at rest.
  */
+var Vector = require('./vector.js');
+
 module.exports = function (options) {
   var merge = require('ngraph.merge');
   var random = require('ngraph.random').random(42);
@@ -382,36 +631,163 @@ module.exports = function (options) {
       var body1 = spring.from,
           body2 = spring.to,
           length = spring.length < 0 ? options.springLength : spring.length,
-          dx = body2.pos.x - body1.pos.x,
-          dy = body2.pos.y - body1.pos.y,
-          dz = body2.pos.z - body1.pos.z,
-          r = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          dist = Vector.sub(body2.pos, body1.pos),
+          r = dist.norm();
 
       if (r === 0) {
-          dx = (random.nextDouble() - 0.5) / 50;
-          dy = (random.nextDouble() - 0.5) / 50;
-          dz = (random.nextDouble() - 0.5) / 50;
-          r = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        dist = Vector.uniform(body2.length, (random.nextDouble() - 0.5)/50);
+        r = dist.norm();
       }
 
       var d = r - length;
       var coeff = ((!spring.coeff || spring.coeff < 0) ? options.springCoeff : spring.coeff) * d / r * spring.weight;
 
-      body1.force.x += coeff * dx;
-      body1.force.y += coeff * dy;
-      body1.force.z += coeff * dz;
-
-      body2.force.x -= coeff * dx;
-      body2.force.y -= coeff * dy;
-      body2.force.z -= coeff * dz;
+      body1.force.moveByScale(coeff, dist);
+      body2.force.moveByScale(-coeff, dist);
     }
   };
 
   expose(options, api, ['springCoeff', 'springLength']);
   return api;
+};
+
+},{"./vector.js":14,"ngraph.expose":15,"ngraph.merge":29,"ngraph.random":30}],14:[function(require,module,exports){
+module.exports = Vector;
+
+function Vector(pos) {
+  var i;
+  if (typeof pos === 'number') {
+    for (i = 0; i < pos; ++i) {
+      this[i] = 0;
+    }
+    this.length = pos;
+  } else {
+    for (i = 0; i < pos.length; ++i) {
+      this[i] = pos[i];
+    }
+    this.length = pos.length;
+  }
 }
 
-},{"ngraph.expose":10,"ngraph.merge":23,"ngraph.random":29}],10:[function(require,module,exports){
+Vector.sub = function(a, b) {
+  var result = new Vector(a.length);
+  for (var i = 0; i < a.length; ++i) {
+    result[i] = a[i] - b[i];
+  }
+  return result;
+};
+
+Vector.add = function(a, b) {
+  var result = new Vector(a.length);
+  for (var i = 0; i < a.length; ++i) {
+    result[i] = a[i] + b[i];
+  }
+  return result;
+};
+
+Vector.uniform = function(dim, initialValue) {
+  var result = new Vector(dim);
+  for (var i = 0; i < dim; ++i) {
+    result[i] = initialValue;
+  }
+  return result;
+};
+
+Vector.prototype.reset = function () {
+  for (var i = 0; i < this.length; ++i) {
+    this[i] = 0;
+  }
+};
+
+Vector.prototype.moveByScale = function (scale, direction) {
+  for (var i = 0; i < this.length; ++i) {
+    this[i] += scale * direction[i];
+  }
+};
+
+Vector.prototype.moveByScaleAndReturnChange = function (scale, direction) {
+  var change = 0;
+  for (var i = 0; i < this.length; ++i) {
+    var x = scale * direction[i];
+    this[i] += x;
+    change += Math.abs(x);
+  }
+  return change;
+};
+
+Vector.prototype.normalize = function () {
+  var norm = this.norm();
+  if (norm > 1) {
+    for (var i = 0; i < this.length; ++i) {
+      this[i] /= norm;
+    }
+  }
+};
+
+Vector.prototype.norm = function() {
+  var sum = 0;
+  for (var i = 0; i < this.length; ++i) {
+    sum += this[i] * this[i];
+  }
+
+  return Math.sqrt(sum);
+};
+
+Vector.prototype.add = function (other) {
+  for (var i = 0; i < this.length; ++i) {
+    this[i] += other[i];
+  }
+};
+
+Vector.prototype.divScalar = function(scalar) {
+  for (var i = 0; i < this.length; ++i) {
+    this[i] /= scalar;
+  }
+};
+
+Vector.prototype.addScalar = function(scalar) {
+  for (var i = 0; i < this.length; ++i) {
+    this[i] += scalar;
+  }
+};
+
+Vector.prototype.assign = function(other) {
+  for (var i = 0; i < this.length; ++i) {
+    this[i] = other[i];
+  }
+};
+
+Vector.prototype.assignUniform = function(other) {
+  for (var i = 0; i < this.length; ++i) {
+    this[i] = other;
+  }
+};
+
+Vector.prototype.assignUniformAdd = function(other, uniform) {
+  for (var i = 0; i < this.length; ++i) {
+    this[i] = other[i] + uniform;
+  }
+};
+
+Vector.prototype.assignMedian = function(a, b) {
+  for (var i = 0; i < this.length; ++i) {
+    this[i] = (a[i] + b[i])/2;
+  }
+};
+
+Vector.prototype.assignSub = function (a, b) {
+  for (var i = 0; i < this.length; ++i) {
+    this[i] = a[i] - b[i];
+  }
+};
+
+Vector.prototype.assignWeightedDiff = function(a, weight, b) {
+  for (var i = 0; i < this.length; ++i) {
+    this[i] = a[i]/weight - b[i];
+  }
+};
+
+},{}],15:[function(require,module,exports){
 module.exports = exposeProperties;
 
 /**
@@ -457,7 +833,7 @@ function augment(source, target, key) {
   }
 }
 
-},{}],11:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 module.exports = createLayout;
 module.exports.simulator = require('ngraph.physics.simulator');
 
@@ -761,7 +1137,7 @@ function createLayout(graph, physicsSettings) {
 
 function noop() { }
 
-},{"ngraph.physics.simulator":12}],12:[function(require,module,exports){
+},{"ngraph.physics.simulator":17}],17:[function(require,module,exports){
 /**
  * Manages a simulation of physical forces acting on bodies and springs.
  */
@@ -1017,7 +1393,7 @@ function physicsSimulator(settings) {
   }
 };
 
-},{"./lib/bounds":13,"./lib/createBody":14,"./lib/dragForce":15,"./lib/eulerIntegrator":16,"./lib/spring":17,"./lib/springForce":18,"ngraph.expose":10,"ngraph.merge":23,"ngraph.quadtreebh":19}],13:[function(require,module,exports){
+},{"./lib/bounds":18,"./lib/createBody":19,"./lib/dragForce":20,"./lib/eulerIntegrator":21,"./lib/spring":22,"./lib/springForce":23,"ngraph.expose":15,"ngraph.merge":29,"ngraph.quadtreebh":25}],18:[function(require,module,exports){
 module.exports = function (bodies, settings) {
   var random = require('ngraph.random').random(42);
   var boundingBox =  { x1: 0, y1: 0, x2: 0, y2: 0 };
@@ -1099,14 +1475,14 @@ module.exports = function (bodies, settings) {
   }
 }
 
-},{"ngraph.random":29}],14:[function(require,module,exports){
+},{"ngraph.random":30}],19:[function(require,module,exports){
 var physics = require('ngraph.physics.primitives');
 
 module.exports = function(pos) {
   return new physics.Body(pos);
 }
 
-},{"ngraph.physics.primitives":24}],15:[function(require,module,exports){
+},{"ngraph.physics.primitives":24}],20:[function(require,module,exports){
 /**
  * Represents drag force, which reduces force value on each step by given
  * coefficient.
@@ -1135,7 +1511,7 @@ module.exports = function (options) {
   return api;
 };
 
-},{"ngraph.expose":10,"ngraph.merge":23}],16:[function(require,module,exports){
+},{"ngraph.expose":15,"ngraph.merge":29}],21:[function(require,module,exports){
 /**
  * Performs forces integration, using given timestep. Uses Euler method to solve
  * differential equation (http://en.wikipedia.org/wiki/Euler_method ).
@@ -1178,7 +1554,7 @@ function integrate(bodies, timeStep) {
   return (tx * tx + ty * ty)/bodies.length;
 }
 
-},{}],17:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 module.exports = Spring;
 
 /**
@@ -1194,7 +1570,7 @@ function Spring(fromBody, toBody, length, coeff, weight) {
     this.weight = typeof weight === 'number' ? weight : 1;
 };
 
-},{}],18:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 /**
  * Represents spring force, which updates forces acting on two bodies, conntected
  * by a spring.
@@ -1246,7 +1622,74 @@ module.exports = function (options) {
   return api;
 }
 
-},{"ngraph.expose":10,"ngraph.merge":23,"ngraph.random":29}],19:[function(require,module,exports){
+},{"ngraph.expose":15,"ngraph.merge":29,"ngraph.random":30}],24:[function(require,module,exports){
+module.exports = {
+  Body: Body,
+  Vector2d: Vector2d,
+  Body3d: Body3d,
+  Vector3d: Vector3d
+};
+
+function Body(x, y) {
+  this.pos = new Vector2d(x, y);
+  this.prevPos = new Vector2d(x, y);
+  this.force = new Vector2d();
+  this.velocity = new Vector2d();
+  this.mass = 1;
+}
+
+Body.prototype.setPosition = function (x, y) {
+  this.prevPos.x = this.pos.x = x;
+  this.prevPos.y = this.pos.y = y;
+};
+
+function Vector2d(x, y) {
+  if (x && typeof x !== 'number') {
+    // could be another vector
+    this.x = typeof x.x === 'number' ? x.x : 0;
+    this.y = typeof x.y === 'number' ? x.y : 0;
+  } else {
+    this.x = typeof x === 'number' ? x : 0;
+    this.y = typeof y === 'number' ? y : 0;
+  }
+}
+
+Vector2d.prototype.reset = function () {
+  this.x = this.y = 0;
+};
+
+function Body3d(x, y, z) {
+  this.pos = new Vector3d(x, y, z);
+  this.prevPos = new Vector3d(x, y, z);
+  this.force = new Vector3d();
+  this.velocity = new Vector3d();
+  this.mass = 1;
+}
+
+Body3d.prototype.setPosition = function (x, y, z) {
+  this.prevPos.x = this.pos.x = x;
+  this.prevPos.y = this.pos.y = y;
+  this.prevPos.z = this.pos.z = z;
+};
+
+function Vector3d(x, y, z) {
+  if (x && typeof x !== 'number') {
+    // could be another vector
+    this.x = typeof x.x === 'number' ? x.x : 0;
+    this.y = typeof x.y === 'number' ? x.y : 0;
+    this.z = typeof x.z === 'number' ? x.z : 0;
+  } else {
+    this.x = typeof x === 'number' ? x : 0;
+    this.y = typeof y === 'number' ? y : 0;
+    this.z = typeof z === 'number' ? z : 0;
+  }
+};
+
+Vector3d.prototype.reset = function () {
+  this.x = this.y = this.z = 0;
+};
+
+},{}],25:[function(require,module,exports){
 /**
  * This is Barnes Hut simulation algorithm for 2d case. Implementation
  * is highly optimized (avoids recusion and gc pressure)
@@ -1572,7 +2015,7 @@ function setChild(node, idx, child) {
   else if (idx === 3) node.quad3 = child;
 }
 
-},{"./insertStack":20,"./isSamePosition":21,"./node":22,"ngraph.random":29}],20:[function(require,module,exports){
+},{"./insertStack":26,"./isSamePosition":27,"./node":28,"ngraph.random":30}],26:[function(require,module,exports){
 module.exports = InsertStack;
 
 /**
@@ -1616,7 +2059,7 @@ function InsertStackElement(node, body) {
     this.body = body; // physical body which needs to be inserted to node
 }
 
-},{}],21:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 module.exports = function isSamePosition(point1, point2) {
     var dx = Math.abs(point1.x - point2.x);
     var dy = Math.abs(point1.y - point2.y);
@@ -1624,7 +2067,7 @@ module.exports = function isSamePosition(point1, point2) {
     return (dx < 1e-8 && dy < 1e-8);
 };
 
-},{}],22:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 /**
  * Internal data structure to represent 2D QuadTree node
  */
@@ -1656,7 +2099,7 @@ module.exports = function Node() {
   this.right = 0;
 };
 
-},{}],23:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 module.exports = merge;
 
 /**
@@ -1689,566 +2132,7 @@ function merge(target, options) {
   return target;
 }
 
-},{}],24:[function(require,module,exports){
-module.exports = {
-  Body: Body,
-  Vector2d: Vector2d,
-  Body3d: Body3d,
-  Vector3d: Vector3d
-};
-
-function Body(x, y) {
-  this.pos = new Vector2d(x, y);
-  this.prevPos = new Vector2d(x, y);
-  this.force = new Vector2d();
-  this.velocity = new Vector2d();
-  this.mass = 1;
-}
-
-Body.prototype.setPosition = function (x, y) {
-  this.prevPos.x = this.pos.x = x;
-  this.prevPos.y = this.pos.y = y;
-};
-
-function Vector2d(x, y) {
-  if (x && typeof x !== 'number') {
-    // could be another vector
-    this.x = typeof x.x === 'number' ? x.x : 0;
-    this.y = typeof x.y === 'number' ? x.y : 0;
-  } else {
-    this.x = typeof x === 'number' ? x : 0;
-    this.y = typeof y === 'number' ? y : 0;
-  }
-}
-
-Vector2d.prototype.reset = function () {
-  this.x = this.y = 0;
-};
-
-function Body3d(x, y, z) {
-  this.pos = new Vector3d(x, y, z);
-  this.prevPos = new Vector3d(x, y, z);
-  this.force = new Vector3d();
-  this.velocity = new Vector3d();
-  this.mass = 1;
-}
-
-Body3d.prototype.setPosition = function (x, y, z) {
-  this.prevPos.x = this.pos.x = x;
-  this.prevPos.y = this.pos.y = y;
-  this.prevPos.z = this.pos.z = z;
-};
-
-function Vector3d(x, y, z) {
-  if (x && typeof x !== 'number') {
-    // could be another vector
-    this.x = typeof x.x === 'number' ? x.x : 0;
-    this.y = typeof x.y === 'number' ? x.y : 0;
-    this.z = typeof x.z === 'number' ? x.z : 0;
-  } else {
-    this.x = typeof x === 'number' ? x : 0;
-    this.y = typeof y === 'number' ? y : 0;
-    this.z = typeof z === 'number' ? z : 0;
-  }
-};
-
-Vector3d.prototype.reset = function () {
-  this.x = this.y = this.z = 0;
-};
-
-},{}],25:[function(require,module,exports){
-/**
- * This is Barnes Hut simulation algorithm for 3d case. Implementation
- * is highly optimized (avoids recusion and gc pressure)
- *
- * http://www.cs.princeton.edu/courses/archive/fall03/cs126/assignments/barnes-hut.html
- *
- * NOTE: This module duplicates a lot of code from 2d case. Primary reason for
- * this is performance. Every time I tried to abstract away vector operations
- * I had negative impact on performance. So in this case I'm scarifying code
- * reuse in favor of speed
- */
-
-module.exports = function(options) {
-  options = options || {};
-  options.gravity = typeof options.gravity === 'number' ? options.gravity : -1;
-  options.theta = typeof options.theta === 'number' ? options.theta : 0.8;
-
-  // we require deterministic randomness here
-  var random = require('ngraph.random').random(1984),
-    Node = require('./node'),
-    InsertStack = require('./insertStack'),
-    isSamePosition = require('./isSamePosition');
-
-  var gravity = options.gravity,
-    updateQueue = [],
-    insertStack = new InsertStack(),
-    theta = options.theta,
-
-    nodesCache = [],
-    currentInCache = 0,
-    newNode = function() {
-      // To avoid pressure on GC we reuse nodes.
-      var node = nodesCache[currentInCache];
-      if (node) {
-        node.quad0 = null;
-        node.quad4 = null;
-        node.quad1 = null;
-        node.quad5 = null;
-        node.quad2 = null;
-        node.quad6 = null;
-        node.quad3 = null;
-        node.quad7 = null;
-        node.body = null;
-        node.mass = node.massX = node.massY = node.massZ = 0;
-        node.left = node.right = node.top = node.bottom = node.front = node.back = 0;
-      } else {
-        node = new Node();
-        nodesCache[currentInCache] = node;
-      }
-
-      ++currentInCache;
-      return node;
-    },
-
-    root = newNode(),
-
-    // Inserts body to the tree
-    insert = function(newBody) {
-      insertStack.reset();
-      insertStack.push(root, newBody);
-
-      while (!insertStack.isEmpty()) {
-        var stackItem = insertStack.pop(),
-          node = stackItem.node,
-          body = stackItem.body;
-
-        if (!node.body) {
-          // This is internal node. Update the total mass of the node and center-of-mass.
-          var x = body.pos.x;
-          var y = body.pos.y;
-          var z = body.pos.z;
-          node.mass += body.mass;
-          node.massX += body.mass * x;
-          node.massY += body.mass * y;
-          node.massZ += body.mass * z;
-
-          // Recursively insert the body in the appropriate quadrant.
-          // But first find the appropriate quadrant.
-          var quadIdx = 0, // Assume we are in the 0's quad.
-            left = node.left,
-            right = (node.right + left) / 2,
-            top = node.top,
-            bottom = (node.bottom + top) / 2,
-            back = node.back,
-            front = (node.front + back) / 2;
-
-          if (x > right) { // somewhere in the eastern part.
-            quadIdx += 1;
-            var oldLeft = left;
-            left = right;
-            right = right + (right - oldLeft);
-          }
-          if (y > bottom) { // and in south.
-            quadIdx += 2;
-            var oldTop = top;
-            top = bottom;
-            bottom = bottom + (bottom - oldTop);
-          }
-          if (z > front) { // and in frontal part
-            quadIdx += 4;
-            var oldBack = back;
-            back = front;
-            front = back + (back - oldBack);
-          }
-
-          var child = getChild(node, quadIdx);
-          if (!child) {
-            // The node is internal but this quadrant is not taken. Add subnode to it.
-            child = newNode();
-            child.left = left;
-            child.top = top;
-            child.right = right;
-            child.bottom = bottom;
-            child.back = back;
-            child.front = front;
-            child.body = body;
-
-            setChild(node, quadIdx, child);
-          } else {
-            // continue searching in this quadrant.
-            insertStack.push(child, body);
-          }
-        } else {
-          // We are trying to add to the leaf node.
-          // We have to convert current leaf into internal node
-          // and continue adding two nodes.
-          var oldBody = node.body;
-          node.body = null; // internal nodes do not carry bodies
-
-          if (isSamePosition(oldBody.pos, body.pos)) {
-            // Prevent infinite subdivision by bumping one node
-            // anywhere in this quadrant
-            var retriesCount = 3;
-            do {
-              var offset = random.nextDouble();
-              var dx = (node.right - node.left) * offset;
-              var dy = (node.bottom - node.top) * offset;
-              var dz = (node.front - node.back) * offset;
-
-              oldBody.pos.x = node.left + dx;
-              oldBody.pos.y = node.top + dy;
-              oldBody.pos.z = node.back + dz;
-              retriesCount -= 1;
-              // Make sure we don't bump it out of the box. If we do, next iteration should fix it
-            } while (retriesCount > 0 && isSamePosition(oldBody.pos, body.pos));
-
-            if (retriesCount === 0 && isSamePosition(oldBody.pos, body.pos)) {
-              // This is very bad, we ran out of precision.
-              // if we do not return from the method we'll get into
-              // infinite loop here. So we sacrifice correctness of layout, and keep the app running
-              // Next layout iteration should get larger bounding box in the first step and fix this
-              return;
-            }
-          }
-          // Next iteration should subdivide node further.
-          insertStack.push(node, oldBody);
-          insertStack.push(node, body);
-        }
-      }
-    },
-
-    update = function(sourceBody) {
-      var queue = updateQueue,
-        v,
-        dx, dy, dz,
-        r, fx = 0,
-        fy = 0,
-        fz = 0,
-        queueLength = 1,
-        shiftIdx = 0,
-        pushIdx = 1;
-
-      queue[0] = root;
-
-      while (queueLength) {
-        var node = queue[shiftIdx],
-          body = node.body;
-
-        queueLength -= 1;
-        shiftIdx += 1;
-        var differentBody = (body !== sourceBody);
-        if (body && differentBody) {
-          // If the current node is a leaf node (and it is not source body),
-          // calculate the force exerted by the current node on body, and add this
-          // amount to body's net force.
-          dx = body.pos.x - sourceBody.pos.x;
-          dy = body.pos.y - sourceBody.pos.y;
-          dz = body.pos.z - sourceBody.pos.z;
-          r = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-          if (r === 0) {
-            // Poor man's protection against zero distance.
-            dx = (random.nextDouble() - 0.5) / 50;
-            dy = (random.nextDouble() - 0.5) / 50;
-            dz = (random.nextDouble() - 0.5) / 50;
-            r = Math.sqrt(dx * dx + dy * dy + dz * dz);
-          }
-
-          // This is standard gravitation force calculation but we divide
-          // by r^3 to save two operations when normalizing force vector.
-          v = gravity * body.mass * sourceBody.mass / (r * r * r);
-          fx += v * dx;
-          fy += v * dy;
-          fz += v * dz;
-        } else if (differentBody) {
-          // Otherwise, calculate the ratio s / r,  where s is the width of the region
-          // represented by the internal node, and r is the distance between the body
-          // and the node's center-of-mass
-          dx = node.massX / node.mass - sourceBody.pos.x;
-          dy = node.massY / node.mass - sourceBody.pos.y;
-          dz = node.massZ / node.mass - sourceBody.pos.z;
-
-          r = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-          if (r === 0) {
-            // Sorry about code duplication. I don't want to create many functions
-            // right away. Just want to see performance first.
-            dx = (random.nextDouble() - 0.5) / 50;
-            dy = (random.nextDouble() - 0.5) / 50;
-            dz = (random.nextDouble() - 0.5) / 50;
-            r = Math.sqrt(dx * dx + dy * dy + dz * dz);
-          }
-
-          // If s / r < θ, treat this internal node as a single body, and calculate the
-          // force it exerts on sourceBody, and add this amount to sourceBody's net force.
-          if ((node.right - node.left) / r < theta) {
-            // in the if statement above we consider node's width only
-            // because the region was squarified during tree creation.
-            // Thus there is no difference between using width or height.
-            v = gravity * node.mass * sourceBody.mass / (r * r * r);
-            fx += v * dx;
-            fy += v * dy;
-            fz += v * dz;
-          } else {
-            // Otherwise, run the procedure recursively on each of the current node's children.
-
-            // I intentionally unfolded this loop, to save several CPU cycles.
-            if (node.quad0) {
-              queue[pushIdx] = node.quad0;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad1) {
-              queue[pushIdx] = node.quad1;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad2) {
-              queue[pushIdx] = node.quad2;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad3) {
-              queue[pushIdx] = node.quad3;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad4) {
-              queue[pushIdx] = node.quad4;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad5) {
-              queue[pushIdx] = node.quad5;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad6) {
-              queue[pushIdx] = node.quad6;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad7) {
-              queue[pushIdx] = node.quad7;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-          }
-        }
-      }
-
-      sourceBody.force.x += fx;
-      sourceBody.force.y += fy;
-      sourceBody.force.z += fz;
-    },
-
-    insertBodies = function(bodies) {
-      var x1 = Number.MAX_VALUE,
-        y1 = Number.MAX_VALUE,
-        z1 = Number.MAX_VALUE,
-        x2 = Number.MIN_VALUE,
-        y2 = Number.MIN_VALUE,
-        z2 = Number.MIN_VALUE,
-        i,
-        max = bodies.length;
-
-      // To reduce quad tree depth we are looking for exact bounding box of all particles.
-      i = max;
-      while (i--) {
-        var pos = bodies[i].pos;
-        var x = pos.x;
-        var y = pos.y;
-        var z = pos.z;
-        if (x < x1) {
-          x1 = x;
-        }
-        if (x > x2) {
-          x2 = x;
-        }
-        if (y < y1) {
-          y1 = y;
-        }
-        if (y > y2) {
-          y2 = y;
-        }
-        if (z < z1) {
-          z1 = z;
-        }
-        if (z > z2) {
-          z2 = z;
-        }
-      }
-
-      // Squarify the bounds.
-      var maxSide = Math.max(x2 - x1, Math.max(y2 - y1, z2 - z1));
-
-      x2 = x1 + maxSide;
-      y2 = y1 + maxSide;
-      z2 = z1 + maxSide;
-
-      currentInCache = 0;
-      root = newNode();
-      root.left = x1;
-      root.right = x2;
-      root.top = y1;
-      root.bottom = y2;
-      root.back = z1;
-      root.front = z2;
-
-      i = max - 1;
-      if (i > 0) {
-        root.body = bodies[i];
-      }
-      while (i--) {
-        insert(bodies[i], root);
-      }
-    };
-
-  return {
-    insertBodies: insertBodies,
-    updateBodyForce: update,
-    options: function(newOptions) {
-      if (newOptions) {
-        if (typeof newOptions.gravity === 'number') {
-          gravity = newOptions.gravity;
-        }
-        if (typeof newOptions.theta === 'number') {
-          theta = newOptions.theta;
-        }
-
-        return this;
-      }
-
-      return {
-        gravity: gravity,
-        theta: theta
-      };
-    }
-  };
-};
-
-function getChild(node, idx) {
-  if (idx === 0) return node.quad0;
-  if (idx === 1) return node.quad1;
-  if (idx === 2) return node.quad2;
-  if (idx === 3) return node.quad3;
-  if (idx === 4) return node.quad4;
-  if (idx === 5) return node.quad5;
-  if (idx === 6) return node.quad6;
-  if (idx === 7) return node.quad7;
-  return null;
-}
-
-function setChild(node, idx, child) {
-  if (idx === 0) node.quad0 = child;
-  else if (idx === 1) node.quad1 = child;
-  else if (idx === 2) node.quad2 = child;
-  else if (idx === 3) node.quad3 = child;
-  else if (idx === 4) node.quad4 = child;
-  else if (idx === 5) node.quad5 = child;
-  else if (idx === 6) node.quad6 = child;
-  else if (idx === 7) node.quad7 = child;
-}
-
-},{"./insertStack":26,"./isSamePosition":27,"./node":28,"ngraph.random":29}],26:[function(require,module,exports){
-module.exports = InsertStack;
-
-/**
- * Our implementation of QuadTree is non-recursive to avoid GC hit
- * This data structure represent stack of elements
- * which we are trying to insert into quad tree.
- */
-function InsertStack () {
-    this.stack = [];
-    this.popIdx = 0;
-}
-
-InsertStack.prototype = {
-    isEmpty: function() {
-        return this.popIdx === 0;
-    },
-    push: function (node, body) {
-        var item = this.stack[this.popIdx];
-        if (!item) {
-            // we are trying to avoid memory pressure: create new element
-            // only when absolutely necessary
-            this.stack[this.popIdx] = new InsertStackElement(node, body);
-        } else {
-            item.node = node;
-            item.body = body;
-        }
-        ++this.popIdx;
-    },
-    pop: function () {
-        if (this.popIdx > 0) {
-            return this.stack[--this.popIdx];
-        }
-    },
-    reset: function () {
-        this.popIdx = 0;
-    }
-};
-
-function InsertStackElement(node, body) {
-    this.node = node; // QuadTree node
-    this.body = body; // physical body which needs to be inserted to node
-}
-
-},{}],27:[function(require,module,exports){
-module.exports = function isSamePosition(point1, point2) {
-    var dx = Math.abs(point1.x - point2.x);
-    var dy = Math.abs(point1.y - point2.y);
-    var dz = Math.abs(point1.z - point2.z);
-
-    return (dx < 1e-8 && dy < 1e-8 && dz < 1e-8);
-};
-
-},{}],28:[function(require,module,exports){
-/**
- * Internal data structure to represent 3D QuadTree node
- */
-module.exports = function Node() {
-  // body stored inside this node. In quad tree only leaf nodes (by construction)
-  // contain boides:
-  this.body = null;
-
-  // Child nodes are stored in quads. Each quad is presented by number:
-  // Behind Z median:
-  // 0 | 1
-  // -----
-  // 2 | 3
-  // In front of Z median:
-  // 4 | 5
-  // -----
-  // 6 | 7
-  this.quad0 = null;
-  this.quad1 = null;
-  this.quad2 = null;
-  this.quad3 = null;
-  this.quad4 = null;
-  this.quad5 = null;
-  this.quad6 = null;
-  this.quad7 = null;
-
-  // Total mass of current node
-  this.mass = 0;
-
-  // Center of mass coordinates
-  this.massX = 0;
-  this.massY = 0;
-  this.massZ = 0;
-
-  // bounding box coordinates
-  this.left = 0;
-  this.top = 0;
-  this.bottom = 0;
-  this.right = 0;
-  this.front = 0;
-  this.back = 0;
-};
-
-},{}],29:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 module.exports = {
   random: random,
   randomIterator: randomIterator
@@ -2335,970 +2219,7 @@ function randomIterator(array, customRandom) {
     };
 }
 
-},{}],30:[function(require,module,exports){
-/**
- * This module is basically a copy of 3d simulator (ngraph.forcelayout4d)
- * I'm still not sure how to generalize this to multidimensional case without
- * affecting performance.
- */
-module.exports = createLayout;
-createLayout.get2dLayout = require('ngraph.forcelayout');
-
-function createLayout(graph, physicsSettings) {
-  var merge = require('ngraph.merge');
-  physicsSettings = merge(physicsSettings, {
-        createQuadTree: require('./lib/orthantTree/index.js'),
-        createBounds: require('./lib/bounds'),
-        createDragForce: require('./lib/dragForce'),
-        createSpringForce: require('./lib/springForce'),
-        integrator: require('./lib/eulerIntegrator'),
-        createBody: require('./lib/createBody')
-      });
-
-  return createLayout.get2dLayout(graph, physicsSettings);
-}
-
-},{"./lib/bounds":31,"./lib/createBody":32,"./lib/dragForce":33,"./lib/eulerIntegrator":34,"./lib/orthantTree/index.js":35,"./lib/springForce":39,"ngraph.forcelayout":41,"ngraph.merge":57}],31:[function(require,module,exports){
-module.exports = bounds;
-function bounds(bodies, settings) {
-  var random = require('ngraph.random').random(42);
-  var boundingBox =  { x1: 0, y1: 0, z1: 0, t1: 0, x2: 0, y2: 0, z2: 0, t2: 0};
-
-  return {
-    box: boundingBox,
-
-    update: updateBoundingBox,
-
-    reset : function () {
-      boundingBox.x1 = boundingBox.y1 = 0;
-      boundingBox.x2 = boundingBox.y2 = 0;
-      boundingBox.z1 = boundingBox.z2 = 0;
-      boundingBox.t1 = boundingBox.t2 = 0;
-    },
-
-    getBestNewPosition: function (neighbors) {
-      var graphRect = boundingBox;
-
-      var baseX = 0, baseY = 0, baseZ = 0, baseT = 0;
-
-      if (neighbors.length) {
-        for (var i = 0; i < neighbors.length; ++i) {
-          baseX += neighbors[i].pos.x;
-          baseY += neighbors[i].pos.y;
-          baseZ += neighbors[i].pos.z;
-          baseT += neighbors[i].pos.t;
-        }
-
-        baseX /= neighbors.length;
-        baseY /= neighbors.length;
-        baseZ /= neighbors.length;
-        baseT /= neighbors.length;
-      } else {
-        baseX = (graphRect.x1 + graphRect.x2) / 2;
-        baseY = (graphRect.y1 + graphRect.y2) / 2;
-        baseZ = (graphRect.z1 + graphRect.z2) / 2;
-        baseT = (graphRect.t1 + graphRect.t2) / 2;
-      }
-
-      var springLength = settings.springLength;
-      return {
-        x: baseX + random.next(springLength) - springLength / 2,
-        y: baseY + random.next(springLength) - springLength / 2,
-        z: baseZ + random.next(springLength) - springLength / 2,
-        t: baseT + random.next(springLength) - springLength / 2
-      };
-    }
-  };
-
-  function updateBoundingBox() {
-    var i = bodies.length;
-    if (i === 0) { return; } // don't have to wory here.
-
-    var x1 = Number.MAX_VALUE,
-        y1 = Number.MAX_VALUE,
-        z1 = Number.MAX_VALUE,
-        t1 = Number.MAX_VALUE,
-        x2 = Number.MIN_VALUE,
-        y2 = Number.MIN_VALUE,
-        z2 = Number.MIN_VALUE,
-        t2 = Number.MIN_VALUE;
-
-    while(i--) {
-      // this is O(n), could it be done faster with quadtree?
-      // how about pinned nodes?
-      var body = bodies[i];
-      if (body.isPinned) {
-        body.pos.x = body.prevPos.x;
-        body.pos.y = body.prevPos.y;
-        body.pos.z = body.prevPos.z;
-        body.pos.t = body.prevPos.t;
-      } else {
-        body.prevPos.x = body.pos.x;
-        body.prevPos.y = body.pos.y;
-        body.prevPos.z = body.pos.z;
-        body.prevPos.t = body.pos.t;
-      }
-      if (body.pos.x < x1) {
-        x1 = body.pos.x;
-      }
-      if (body.pos.x > x2) {
-        x2 = body.pos.x;
-      }
-      if (body.pos.y < y1) {
-        y1 = body.pos.y;
-      }
-      if (body.pos.y > y2) {
-        y2 = body.pos.y;
-      }
-      if (body.pos.z < z1) {
-        z1 = body.pos.z;
-      }
-      if (body.pos.z > z2) {
-        z2 = body.pos.z;
-      }
-      if (body.pos.t < t1) {
-        t1 = body.pos.t;
-      }
-      if (body.pos.t > t2) {
-        t2 = body.pos.t;
-      }
-    }
-
-    boundingBox.x1 = x1;
-    boundingBox.x2 = x2;
-    boundingBox.y1 = y1;
-    boundingBox.y2 = y2;
-    boundingBox.z1 = z1;
-    boundingBox.z2 = z2;
-    boundingBox.t1 = t1;
-    boundingBox.t2 = t2;
-  }
-}
-
-},{"ngraph.random":58}],32:[function(require,module,exports){
-module.exports = function(pos) {
-  return new Body4d(pos);
-};
-
-function Body4d(pos) {
-  this.pos = new Vector4d(pos.x, pos.y, pos.z, pos.t);
-  this.prevPos = new Vector4d(pos.x, pos.y, pos.z, pos.t);
-  this.force = new Vector4d();
-  this.velocity = new Vector4d();
-  this.mass = 1;
-}
-
-Body4d.prototype.setPosition = function (x, y, z, t) {
-  this.prevPos.x = this.pos.x = x;
-  this.prevPos.y = this.pos.y = y;
-  this.prevPos.z = this.pos.z = z;
-  this.prevPos.t = this.pos.t = t;
-};
-
-function Vector4d(x, y, z, t) {
-  if (x && typeof x !== 'number') {
-    // could be another vector
-    this.x = typeof x.x === 'number' ? x.x : 0;
-    this.y = typeof x.y === 'number' ? x.y : 0;
-    this.z = typeof x.z === 'number' ? x.z : 0;
-    this.t = typeof x.t === 'number' ? x.t : 0;
-  } else {
-    this.x = typeof x === 'number' ? x : 0;
-    this.y = typeof y === 'number' ? y : 0;
-    this.z = typeof z === 'number' ? z : 0;
-    this.t = typeof t === 'number' ? t : 0;
-  }
-}
-
-Vector4d.prototype.reset = function () {
-  this.x = this.y = this.z = this.t = 0;
-};
-
-},{}],33:[function(require,module,exports){
-/**
- * Represents 3d drag force, which reduces force value on each step by given
- * coefficient.
- *
- * @param {Object} options for the drag force
- * @param {Number=} options.dragCoeff drag force coefficient. 0.1 by default
- */
-module.exports = function (options) {
-  var merge = require('ngraph.merge'),
-      expose = require('ngraph.expose');
-
-  options = merge(options, {
-    dragCoeff: 0.02
-  });
-
-  var api = {
-    update : function (body) {
-      body.force.x -= options.dragCoeff * body.velocity.x;
-      body.force.y -= options.dragCoeff * body.velocity.y;
-      body.force.z -= options.dragCoeff * body.velocity.z;
-      body.force.t -= options.dragCoeff * body.velocity.t;
-    }
-  };
-
-  // let easy access to dragCoeff:
-  expose(options, api, ['dragCoeff']);
-
-  return api;
-};
-
-},{"ngraph.expose":40,"ngraph.merge":57}],34:[function(require,module,exports){
-/**
- * Performs 4d forces integration, using given timestep. Uses Euler method to solve
- * differential equation (http://en.wikipedia.org/wiki/Euler_method ).
- *
- * @returns {Number} squared distance of total position updates.
- */
-
-module.exports = integrate;
-
-function integrate(bodies, timeStep) {
-  var dx = 0, tx = 0,
-      dy = 0, ty = 0,
-      dz = 0, tz = 0,
-      dt = 0, tt = 0,
-      i,
-      max = bodies.length;
-
-  for (i = 0; i < max; ++i) {
-    var body = bodies[i],
-        coeff = timeStep / body.mass;
-
-    body.velocity.x += coeff * body.force.x;
-    body.velocity.y += coeff * body.force.y;
-    body.velocity.z += coeff * body.force.z;
-    body.velocity.t += coeff * body.force.t;
-
-    var vx = body.velocity.x,
-        vy = body.velocity.y,
-        vz = body.velocity.z,
-        vt = body.velocity.t,
-        v = Math.sqrt(vx * vx + vy * vy + vz * vz + vt * vt);
-
-    if (v > 1) {
-      body.velocity.x = vx / v;
-      body.velocity.y = vy / v;
-      body.velocity.z = vz / v;
-      body.velocity.t = vt / v;
-    }
-
-    dx = timeStep * body.velocity.x;
-    dy = timeStep * body.velocity.y;
-    dz = timeStep * body.velocity.z;
-    dt = timeStep * body.velocity.t;
-
-    body.pos.x += dx;
-    body.pos.y += dy;
-    body.pos.z += dz;
-    body.pos.t += dt;
-
-    tx += Math.abs(dx);
-    ty += Math.abs(dy);
-    tz += Math.abs(dz);
-    tt += Math.abs(dt);
-  }
-
-  return (tx * tx + ty * ty + tz * tz + tt * tt)/bodies.length;
-}
-
-},{}],35:[function(require,module,exports){
-/**
- * This is Barnes Hut simulation algorithm for 4d case. Implementation
- * is highly optimized (avoids recusion and gc pressure)
- *
- * http://www.cs.princeton.edu/courses/archive/fall03/cs126/assignments/barnes-hut.html
- *
- * NOTE: This module duplicates a lot of code from 2d/3d case. Primary reason for
- * this is performance. Every time I tried to abstract away vector operations
- * I had negative impact on performance. So in this case I'm scarifying code
- * reuse in favor of speed
- */
-
-module.exports = function(options) {
-  options = options || {};
-  options.gravity = typeof options.gravity === 'number' ? options.gravity : -1;
-  options.theta = typeof options.theta === 'number' ? options.theta : 0.8;
-
-  // we require deterministic randomness here
-  var random = require('ngraph.random').random(1984),
-    Node = require('./node'),
-    InsertStack = require('./insertStack'),
-    isSamePosition = require('./isSamePosition');
-
-  var gravity = options.gravity,
-    updateQueue = [],
-    insertStack = new InsertStack(),
-    theta = options.theta,
-
-    nodesCache = [],
-    currentInCache = 0,
-    newNode = function() {
-      // To avoid pressure on GC we reuse nodes.
-      var node = nodesCache[currentInCache];
-      if (node) {
-        node.quad0 = null;
-        node.quad4 = null;
-        node.quad1 = null;
-        node.quad5 = null;
-        node.quad2 = null;
-        node.quad6 = null;
-        node.quad3 = null;
-        node.quad7 = null;
-        node.quad8 = null;
-        node.quad9 = null;
-        node.quad10 = null;
-        node.quad11 = null;
-        node.quad12 = null;
-        node.quad13 = null;
-        node.quad14 = null;
-        node.quad15 = null;
-        node.body = null;
-
-        node.mass = node.massX = node.massY = node.massZ = node.massT = 0;
-        node.left = node.right = node.top = node.bottom = node.front = node.back = node.start = node.end = 0;
-      } else {
-        node = new Node();
-        nodesCache[currentInCache] = node;
-      }
-
-      ++currentInCache;
-      return node;
-    },
-
-    root = newNode(),
-
-    // Inserts body to the tree
-    insert = function(newBody) {
-      insertStack.reset();
-      insertStack.push(root, newBody);
-
-      while (!insertStack.isEmpty()) {
-        var stackItem = insertStack.pop(),
-          node = stackItem.node,
-          body = stackItem.body;
-
-        if (!node.body) {
-          // This is internal node. Update the total mass of the node and center-of-mass.
-          var x = body.pos.x;
-          var y = body.pos.y;
-          var z = body.pos.z;
-          var t = body.pos.t;
-          node.mass += body.mass;
-          node.massX += body.mass * x;
-          node.massY += body.mass * y;
-          node.massZ += body.mass * z;
-          node.massT += body.mass * t;
-
-          // Recursively insert the body in the appropriate quadrant.
-          // But first find the appropriate quadrant.
-          var quadIdx = 0, // Assume we are in the 0's quad.
-            left = node.left,
-            right = (node.right + left) / 2,
-            top = node.top,
-            bottom = (node.bottom + top) / 2,
-            back = node.back,
-            front = (node.front + back) / 2,
-            start = node.start,
-            end = (node.end + start)/2;
-
-          if (x > right) { // somewhere in the eastern part.
-            quadIdx += 1;
-            var oldLeft = left;
-            left = right;
-            right = right + (right - oldLeft);
-          }
-          if (y > bottom) { // and in south.
-            quadIdx += 2;
-            var oldTop = top;
-            top = bottom;
-            bottom = bottom + (bottom - oldTop);
-          }
-          if (z > front) { // and in frontal part
-            quadIdx += 4;
-            var oldBack = back;
-            back = front;
-            front = back + (back - oldBack);
-          } if (t > end) { // and in the future
-            quadIdx += 8;
-            var oldStart = start;
-            start = end;
-            end = start + (start - oldStart);
-          }
-
-          var child = getChild(node, quadIdx);
-          if (!child) {
-            // The node is internal but this quadrant is not taken. Add subnode to it.
-            child = newNode();
-            child.left = left;
-            child.top = top;
-            child.right = right;
-            child.bottom = bottom;
-            child.back = back;
-            child.front = front;
-            child.start = start;
-            child.end = end;
-
-            child.body = body;
-
-            setChild(node, quadIdx, child);
-          } else {
-            // continue searching in this quadrant.
-            insertStack.push(child, body);
-          }
-        } else {
-          // We are trying to add to the leaf node.
-          // We have to convert current leaf into internal node
-          // and continue adding two nodes.
-          var oldBody = node.body;
-          node.body = null; // internal nodes do not carry bodies
-
-          if (isSamePosition(oldBody.pos, body.pos)) {
-            // Prevent infinite subdivision by bumping one node
-            // anywhere in this quadrant
-            var retriesCount = 3;
-            do {
-              var offset = random.nextDouble();
-              var dx = (node.right - node.left) * offset;
-              var dy = (node.bottom - node.top) * offset;
-              var dz = (node.front - node.back) * offset;
-              var dt = (node.end - node.start) * offset;
-
-              oldBody.pos.x = node.left + dx;
-              oldBody.pos.y = node.top + dy;
-              oldBody.pos.z = node.back + dz;
-              oldBody.pos.t = node.start + dt;
-              retriesCount -= 1;
-              // Make sure we don't bump it out of the box. If we do, next iteration should fix it
-            } while (retriesCount > 0 && isSamePosition(oldBody.pos, body.pos));
-
-            if (retriesCount === 0 && isSamePosition(oldBody.pos, body.pos)) {
-              // This is very bad, we ran out of precision.
-              // if we do not return from the method we'll get into
-              // infinite loop here. So we sacrifice correctness of layout, and keep the app running
-              // Next layout iteration should get larger bounding box in the first step and fix this
-              return;
-            }
-          }
-          // Next iteration should subdivide node further.
-          insertStack.push(node, oldBody);
-          insertStack.push(node, body);
-        }
-      }
-    },
-
-    update = function(sourceBody) {
-      var queue = updateQueue,
-        v,
-        dx, dy, dz, dt,
-        r,
-        fx = 0,
-        fy = 0,
-        fz = 0,
-        ft = 0,
-        queueLength = 1,
-        shiftIdx = 0,
-        pushIdx = 1;
-
-      queue[0] = root;
-
-      while (queueLength) {
-        var node = queue[shiftIdx],
-          body = node.body;
-
-        queueLength -= 1;
-        shiftIdx += 1;
-        var differentBody = (body !== sourceBody);
-        if (body && differentBody) {
-          // If the current node is a leaf node (and it is not source body),
-          // calculate the force exerted by the current node on body, and add this
-          // amount to body's net force.
-          dx = body.pos.x - sourceBody.pos.x;
-          dy = body.pos.y - sourceBody.pos.y;
-          dz = body.pos.z - sourceBody.pos.z;
-          dt = body.pos.t - sourceBody.pos.t;
-          r = Math.sqrt(dx * dx + dy * dy + dz * dz + dt * dt);
-
-          if (r === 0) {
-            // Poor man's protection against zero distance.
-            dx = (random.nextDouble() - 0.5) / 50;
-            dy = (random.nextDouble() - 0.5) / 50;
-            dz = (random.nextDouble() - 0.5) / 50;
-            dt = (random.nextDouble() - 0.5) / 50;
-            r = Math.sqrt(dx * dx + dy * dy + dz * dz + dt * dt);
-          }
-
-          // This is standard gravitation force calculation but we divide
-          // by r^3 to save two operations when normalizing force vector.
-          v = gravity * body.mass * sourceBody.mass / (r * r * r);
-          fx += v * dx;
-          fy += v * dy;
-          fz += v * dz;
-          ft += v * dt;
-        } else if (differentBody) {
-          // Otherwise, calculate the ratio s / r,  where s is the width of the region
-          // represented by the internal node, and r is the distance between the body
-          // and the node's center-of-mass
-          dx = node.massX / node.mass - sourceBody.pos.x;
-          dy = node.massY / node.mass - sourceBody.pos.y;
-          dz = node.massZ / node.mass - sourceBody.pos.z;
-          dt = node.massT / node.mass - sourceBody.pos.t;
-
-          r = Math.sqrt(dx * dx + dy * dy + dz * dz + dt * dt);
-
-          if (r === 0) {
-            // Sorry about code duplication. I don't want to create many functions
-            // right away. Just want to see performance first.
-            dx = (random.nextDouble() - 0.5) / 50;
-            dy = (random.nextDouble() - 0.5) / 50;
-            dz = (random.nextDouble() - 0.5) / 50;
-            dt = (random.nextDouble() - 0.5) / 50;
-            r = Math.sqrt(dx * dx + dy * dy + dz * dz + dt * dt);
-          }
-
-          // If s / r < θ, treat this internal node as a single body, and calculate the
-          // force it exerts on sourceBody, and add this amount to sourceBody's net force.
-          if ((node.right - node.left) / r < theta) {
-            // in the if statement above we consider node's width only
-            // because the region was squarified during tree creation.
-            // Thus there is no difference between using width or height.
-            v = gravity * node.mass * sourceBody.mass / (r * r * r);
-            fx += v * dx;
-            fy += v * dy;
-            fz += v * dz;
-            ft += v * dt;
-          } else {
-            // Otherwise, run the procedure recursively on each of the current node's children.
-
-            // I intentionally unfolded this loop, to save several CPU cycles.
-            if (node.quad0) {
-              queue[pushIdx] = node.quad0;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad1) {
-              queue[pushIdx] = node.quad1;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad2) {
-              queue[pushIdx] = node.quad2;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad3) {
-              queue[pushIdx] = node.quad3;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad4) {
-              queue[pushIdx] = node.quad4;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad5) {
-              queue[pushIdx] = node.quad5;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad6) {
-              queue[pushIdx] = node.quad6;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad7) {
-              queue[pushIdx] = node.quad7;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad8) {
-              queue[pushIdx] = node.quad8;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad9) {
-              queue[pushIdx] = node.quad9;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad10) {
-              queue[pushIdx] = node.quad10;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad11) {
-              queue[pushIdx] = node.quad11;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad12) {
-              queue[pushIdx] = node.quad12;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad13) {
-              queue[pushIdx] = node.quad13;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad14) {
-              queue[pushIdx] = node.quad14;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-            if (node.quad15) {
-              queue[pushIdx] = node.quad15;
-              queueLength += 1;
-              pushIdx += 1;
-            }
-          }
-        }
-      }
-
-      sourceBody.force.x += fx;
-      sourceBody.force.y += fy;
-      sourceBody.force.z += fz;
-      sourceBody.force.t += ft;
-    },
-
-    insertBodies = function(bodies) {
-      var x1 = Number.MAX_VALUE,
-        y1 = Number.MAX_VALUE,
-        z1 = Number.MAX_VALUE,
-        t1 = Number.MAX_VALUE,
-        x2 = Number.MIN_VALUE,
-        y2 = Number.MIN_VALUE,
-        z2 = Number.MIN_VALUE,
-        t2 = Number.MIN_VALUE,
-        i,
-        max = bodies.length;
-
-      // To reduce quad tree depth we are looking for exact bounding box of all particles.
-      i = max;
-      while (i--) {
-        var pos = bodies[i].pos;
-        var x = pos.x;
-        var y = pos.y;
-        var z = pos.z;
-        var t = pos.t;
-        if (x < x1) x1 = x;
-        if (x > x2) x2 = x;
-        if (y < y1) y1 = y;
-        if (y > y2) y2 = y;
-        if (z < z1) z1 = z;
-        if (z > z2) z2 = z;
-        if (t < t1) t1 = t;
-        if (t > t2) t2 = t;
-      }
-
-      // Squarify the bounds.
-      var maxSide = Math.max(x2 - x1, Math.max(y2 - y1, Math.max(t2- t1, z2 - z1)));
-
-      x2 = x1 + maxSide;
-      y2 = y1 + maxSide;
-      z2 = z1 + maxSide;
-      t2 = t1 + maxSide;
-
-      currentInCache = 0;
-      root = newNode();
-      root.left = x1;
-      root.right = x2;
-      root.top = y1;
-      root.bottom = y2;
-      root.back = z1;
-      root.front = z2;
-      root.start = t1;
-      root.end = t2;
-
-      i = max - 1;
-      if (i > 0) {
-        root.body = bodies[i];
-      }
-      while (i--) {
-        insert(bodies[i], root);
-      }
-    };
-
-  return {
-    insertBodies: insertBodies,
-    updateBodyForce: update,
-    options: function(newOptions) {
-      if (newOptions) {
-        if (typeof newOptions.gravity === 'number') {
-          gravity = newOptions.gravity;
-        }
-        if (typeof newOptions.theta === 'number') {
-          theta = newOptions.theta;
-        }
-
-        return this;
-      }
-
-      return {
-        gravity: gravity,
-        theta: theta
-      };
-    }
-  };
-};
-
-function getChild(node, idx) {
-  if (idx === 0) return node.quad0;
-  if (idx === 1) return node.quad1;
-  if (idx === 2) return node.quad2;
-  if (idx === 3) return node.quad3;
-  if (idx === 4) return node.quad4;
-  if (idx === 5) return node.quad5;
-  if (idx === 6) return node.quad6;
-  if (idx === 7) return node.quad7;
-  if (idx === 8) return node.quad8;
-  if (idx === 9) return node.quad9;
-  if (idx === 10) return node.quad10;
-  if (idx === 11) return node.quad11;
-  if (idx === 12) return node.quad12;
-  if (idx === 13) return node.quad13;
-  if (idx === 14) return node.quad14;
-  if (idx === 15) return node.quad15;
-  return null;
-}
-
-function setChild(node, idx, child) {
-  if (idx === 0) node.quad0 = child;
-  else if (idx === 1) node.quad1 = child;
-  else if (idx === 2) node.quad2 = child;
-  else if (idx === 3) node.quad3 = child;
-  else if (idx === 4) node.quad4 = child;
-  else if (idx === 5) node.quad5 = child;
-  else if (idx === 6) node.quad6 = child;
-  else if (idx === 7) node.quad7 = child;
-  else if (idx === 8) node.quad8 = child;
-  else if (idx === 9) node.quad9 = child;
-  else if (idx === 10) node.quad10 = child;
-  else if (idx === 11) node.quad11 = child;
-  else if (idx === 12) node.quad12 = child;
-  else if (idx === 13) node.quad13 = child;
-  else if (idx === 14) node.quad14 = child;
-  else if (idx === 15) node.quad15 = child;
-}
-
-},{"./insertStack":36,"./isSamePosition":37,"./node":38,"ngraph.random":58}],36:[function(require,module,exports){
-module.exports = InsertStack;
-
-/**
- * Our implementation of OrtantTree is non-recursive to avoid GC hit
- * This data structure represent stack of elements
- * which we are trying to insert into the tree.
- */
-function InsertStack () {
-    this.stack = [];
-    this.popIdx = 0;
-}
-
-InsertStack.prototype = {
-    isEmpty: function() {
-        return this.popIdx === 0;
-    },
-    push: function (node, body) {
-        var item = this.stack[this.popIdx];
-        if (!item) {
-            // we are trying to avoid memory pressure: create new element
-            // only when absolutely necessary
-            this.stack[this.popIdx] = new InsertStackElement(node, body);
-        } else {
-            item.node = node;
-            item.body = body;
-        }
-        ++this.popIdx;
-    },
-    pop: function () {
-        if (this.popIdx > 0) {
-            return this.stack[--this.popIdx];
-        }
-    },
-    reset: function () {
-        this.popIdx = 0;
-    }
-};
-
-function InsertStackElement(node, body) {
-    this.node = node; // tree node
-    this.body = body; // physical body which needs to be inserted to node
-}
-
-},{}],37:[function(require,module,exports){
-module.exports = function isSamePosition(point1, point2) {
-    var dx = Math.abs(point1.x - point2.x);
-    var dy = Math.abs(point1.y - point2.y);
-    var dz = Math.abs(point1.z - point2.z);
-    var dt = Math.abs(point1.t - point2.t);
-
-    return (dx < 1e-8 && dy < 1e-8 && dz < 1e-8 && dt < 1e-8);
-};
-
-},{}],38:[function(require,module,exports){
-/**
- * Internal data structure to represent 4D tree node
- */
-module.exports = function Node() {
-  // body stored inside this node. In quad tree only leaf nodes (by construction)
-  // contain boides:
-  this.body = null;
-
-  // Child nodes are stored in quads. Each quad is presented by number:
-  // Behind Z median:
-  // 0 | 1
-  // -----
-  // 2 | 3
-  // In front of Z median:
-  // 4 | 5
-  // -----
-  // 6 | 7
-  // In past of T median:
-  // 8 | 9
-  // -----
-  // 10|11
-  // In the future of T median:
-  // 12|13
-  // -----
-  // 14|15
-  this.quad0 = null;
-  this.quad1 = null;
-  this.quad2 = null;
-  this.quad3 = null;
-  this.quad4 = null;
-  this.quad5 = null;
-  this.quad6 = null;
-  this.quad7 = null;
-  this.quad8 = null;
-  this.quad9 = null;
-  this.quad10 = null;
-  this.quad11 = null;
-  this.quad12 = null;
-  this.quad13 = null;
-  this.quad14 = null;
-  this.quad15 = null;
-
-  // Total mass of current node
-  this.mass = 0;
-
-  // Center of mass coordinates
-  this.massX = 0;
-  this.massY = 0;
-  this.massZ = 0;
-  this.massT = 0;
-
-  // bounding box coordinates
-  this.left = 0;
-  this.top = 0;
-  this.bottom = 0;
-  this.right = 0;
-  this.front = 0;
-  this.back = 0;
-  this.start = 0;
-  this.end = 0;
-};
-
-},{}],39:[function(require,module,exports){
-/**
- * Represents 4d spring force, which updates forces acting on two bodies, conntected
- * by a spring.
- *
- * @param {Object} options for the spring force
- * @param {Number=} options.springCoeff spring force coefficient.
- * @param {Number=} options.springLength desired length of a spring at rest.
- */
-module.exports = function (options) {
-  var merge = require('ngraph.merge');
-  var random = require('ngraph.random').random(42);
-  var expose = require('ngraph.expose');
-
-  options = merge(options, {
-    springCoeff: 0.0002,
-    springLength: 80
-  });
-
-  var api = {
-    /**
-     * Upsates forces acting on a spring
-     */
-    update : function (spring) {
-      var body1 = spring.from,
-          body2 = spring.to,
-          length = spring.length < 0 ? options.springLength : spring.length,
-          dx = body2.pos.x - body1.pos.x,
-          dy = body2.pos.y - body1.pos.y,
-          dz = body2.pos.z - body1.pos.z,
-          dt = body2.pos.t - body1.pos.t,
-          r = Math.sqrt(dx * dx + dy * dy + dz * dz + dt * dt);
-
-      if (r === 0) {
-          dx = (random.nextDouble() - 0.5) / 50;
-          dy = (random.nextDouble() - 0.5) / 50;
-          dz = (random.nextDouble() - 0.5) / 50;
-          dt = (random.nextDouble() - 0.5) / 50;
-          r = Math.sqrt(dx * dx + dy * dy + dz * dz + dt * dt);
-      }
-
-      var d = r - length;
-      var coeff = ((!spring.coeff || spring.coeff < 0) ? options.springCoeff : spring.coeff) * d / r * spring.weight;
-
-      body1.force.x += coeff * dx;
-      body1.force.y += coeff * dy;
-      body1.force.z += coeff * dz;
-      body1.force.t += coeff * dt;
-
-      body2.force.x -= coeff * dx;
-      body2.force.y -= coeff * dy;
-      body2.force.z -= coeff * dz;
-      body2.force.t -= coeff * dt;
-    }
-  };
-
-  expose(options, api, ['springCoeff', 'springLength']);
-  return api;
-};
-
-},{"ngraph.expose":40,"ngraph.merge":57,"ngraph.random":58}],40:[function(require,module,exports){
-arguments[4][10][0].apply(exports,arguments)
-},{"dup":10}],41:[function(require,module,exports){
-arguments[4][11][0].apply(exports,arguments)
-},{"dup":11,"ngraph.physics.simulator":42}],42:[function(require,module,exports){
-arguments[4][12][0].apply(exports,arguments)
-},{"./lib/bounds":43,"./lib/createBody":44,"./lib/dragForce":45,"./lib/eulerIntegrator":46,"./lib/spring":47,"./lib/springForce":48,"dup":12,"ngraph.expose":49,"ngraph.merge":50,"ngraph.quadtreebh":52}],43:[function(require,module,exports){
-arguments[4][13][0].apply(exports,arguments)
-},{"dup":13,"ngraph.random":56}],44:[function(require,module,exports){
-arguments[4][14][0].apply(exports,arguments)
-},{"dup":14,"ngraph.physics.primitives":51}],45:[function(require,module,exports){
-arguments[4][15][0].apply(exports,arguments)
-},{"dup":15,"ngraph.expose":49,"ngraph.merge":50}],46:[function(require,module,exports){
-arguments[4][16][0].apply(exports,arguments)
-},{"dup":16}],47:[function(require,module,exports){
-arguments[4][17][0].apply(exports,arguments)
-},{"dup":17}],48:[function(require,module,exports){
-arguments[4][18][0].apply(exports,arguments)
-},{"dup":18,"ngraph.expose":49,"ngraph.merge":50,"ngraph.random":56}],49:[function(require,module,exports){
-arguments[4][10][0].apply(exports,arguments)
-},{"dup":10}],50:[function(require,module,exports){
-arguments[4][23][0].apply(exports,arguments)
-},{"dup":23}],51:[function(require,module,exports){
-arguments[4][24][0].apply(exports,arguments)
-},{"dup":24}],52:[function(require,module,exports){
-arguments[4][19][0].apply(exports,arguments)
-},{"./insertStack":53,"./isSamePosition":54,"./node":55,"dup":19,"ngraph.random":56}],53:[function(require,module,exports){
-arguments[4][20][0].apply(exports,arguments)
-},{"dup":20}],54:[function(require,module,exports){
-arguments[4][21][0].apply(exports,arguments)
-},{"dup":21}],55:[function(require,module,exports){
-arguments[4][22][0].apply(exports,arguments)
-},{"dup":22}],56:[function(require,module,exports){
-arguments[4][29][0].apply(exports,arguments)
-},{"dup":29}],57:[function(require,module,exports){
-arguments[4][23][0].apply(exports,arguments)
-},{"dup":23}],58:[function(require,module,exports){
-arguments[4][29][0].apply(exports,arguments)
-},{"dup":29}],59:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 module.exports = {
   ladder: ladder,
   complete: complete,
@@ -3599,7 +2520,7 @@ function wattsStrogatz(n, k, p, seed) {
   return g;
 }
 
-},{"ngraph.graph":60,"ngraph.random":62}],60:[function(require,module,exports){
+},{"ngraph.graph":32,"ngraph.random":34}],32:[function(require,module,exports){
 /**
  * @fileOverview Contains definition of the core graph object.
  */
@@ -4153,7 +3074,7 @@ function Link(fromId, toId, data, id) {
   this.id = id;
 }
 
-},{"ngraph.events":61}],61:[function(require,module,exports){
+},{"ngraph.events":33}],33:[function(require,module,exports){
 module.exports = function(subject) {
   validateSubject(subject);
 
@@ -4243,9 +3164,9 @@ function validateSubject(subject) {
   }
 }
 
-},{}],62:[function(require,module,exports){
-arguments[4][29][0].apply(exports,arguments)
-},{"dup":29}],63:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
+arguments[4][30][0].apply(exports,arguments)
+},{"dup":30}],35:[function(require,module,exports){
 module.exports = pixel;
 var THREE = require('three');
 var eventify = require('ngraph.events');
@@ -4590,7 +3511,7 @@ function pixel(graph, options) {
   }
 }
 
-},{"./lib/autoFit.js":64,"./lib/edgeView.js":67,"./lib/flyTo.js":68,"./lib/input.js":70,"./lib/nodeView.js":72,"./lib/tooltip.js":73,"./options.js":107,"ngraph.events":76,"three":106}],64:[function(require,module,exports){
+},{"./lib/autoFit.js":36,"./lib/edgeView.js":39,"./lib/flyTo.js":40,"./lib/input.js":42,"./lib/nodeView.js":44,"./lib/tooltip.js":45,"./options.js":79,"ngraph.events":48,"three":78}],36:[function(require,module,exports){
 var flyTo = require('./flyTo.js');
 module.exports = createAutoFit;
 
@@ -4606,7 +3527,7 @@ function createAutoFit(nodeView, camera) {
   }
 }
 
-},{"./flyTo.js":68}],65:[function(require,module,exports){
+},{"./flyTo.js":40}],37:[function(require,module,exports){
 var THREE = require('three');
 
 
@@ -4650,10 +3571,12 @@ function createParticleMaterial() {
   });
 }
 
-},{"./defaultTexture.js":66,"three":106}],66:[function(require,module,exports){
-module.exports = 'data:image/png;base64,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';
+},{"./defaultTexture.js":38,"three":78}],38:[function(require,module,exports){
+//module.exports = 'data:image/png;base64,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';
 
-},{}],67:[function(require,module,exports){
+module.exports = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAKQWlDQ1BJQ0MgUHJvZmlsZQAASA2dlndUU9kWh8+9N73QEiIgJfQaegkg0jtIFQRRiUmAUAKGhCZ2RAVGFBEpVmRUwAFHhyJjRRQLg4Ji1wnyEFDGwVFEReXdjGsJ7601896a/cdZ39nnt9fZZ+9917oAUPyCBMJ0WAGANKFYFO7rwVwSE8vE9wIYEAEOWAHA4WZmBEf4RALU/L09mZmoSMaz9u4ugGS72yy/UCZz1v9/kSI3QyQGAApF1TY8fiYX5QKUU7PFGTL/BMr0lSkyhjEyFqEJoqwi48SvbPan5iu7yZiXJuShGlnOGbw0noy7UN6aJeGjjAShXJgl4GejfAdlvVRJmgDl9yjT0/icTAAwFJlfzOcmoWyJMkUUGe6J8gIACJTEObxyDov5OWieAHimZ+SKBIlJYqYR15hp5ejIZvrxs1P5YjErlMNN4Yh4TM/0tAyOMBeAr2+WRQElWW2ZaJHtrRzt7VnW5mj5v9nfHn5T/T3IevtV8Sbsz55BjJ5Z32zsrC+9FgD2JFqbHbO+lVUAtG0GQOXhrE/vIADyBQC03pzzHoZsXpLE4gwnC4vs7GxzAZ9rLivoN/ufgm/Kv4Y595nL7vtWO6YXP4EjSRUzZUXlpqemS0TMzAwOl89k/fcQ/+PAOWnNycMsnJ/AF/GF6FVR6JQJhIlou4U8gViQLmQKhH/V4X8YNicHGX6daxRodV8AfYU5ULhJB8hvPQBDIwMkbj96An3rWxAxCsi+vGitka9zjzJ6/uf6Hwtcim7hTEEiU+b2DI9kciWiLBmj34RswQISkAd0oAo0gS4wAixgDRyAM3AD3iAAhIBIEAOWAy5IAmlABLJBPtgACkEx2AF2g2pwANSBetAEToI2cAZcBFfADXALDIBHQAqGwUswAd6BaQiC8BAVokGqkBakD5lC1hAbWgh5Q0FQOBQDxUOJkBCSQPnQJqgYKoOqoUNQPfQjdBq6CF2D+qAH0CA0Bv0BfYQRmALTYQ3YALaA2bA7HAhHwsvgRHgVnAcXwNvhSrgWPg63whfhG/AALIVfwpMIQMgIA9FGWAgb8URCkFgkAREha5EipAKpRZqQDqQbuY1IkXHkAwaHoWGYGBbGGeOHWYzhYlZh1mJKMNWYY5hWTBfmNmYQM4H5gqVi1bGmWCesP3YJNhGbjS3EVmCPYFuwl7ED2GHsOxwOx8AZ4hxwfrgYXDJuNa4Etw/XjLuA68MN4SbxeLwq3hTvgg/Bc/BifCG+Cn8cfx7fjx/GvyeQCVoEa4IPIZYgJGwkVBAaCOcI/YQRwjRRgahPdCKGEHnEXGIpsY7YQbxJHCZOkxRJhiQXUiQpmbSBVElqIl0mPSa9IZPJOmRHchhZQF5PriSfIF8lD5I/UJQoJhRPShxFQtlOOUq5QHlAeUOlUg2obtRYqpi6nVpPvUR9Sn0vR5Mzl/OX48mtk6uRa5Xrl3slT5TXl3eXXy6fJ18hf0r+pvy4AlHBQMFTgaOwVqFG4bTCPYVJRZqilWKIYppiiWKD4jXFUSW8koGStxJPqUDpsNIlpSEaQtOledK4tE20Otpl2jAdRzek+9OT6cX0H+i99AllJWVb5SjlHOUa5bPKUgbCMGD4M1IZpYyTjLuMj/M05rnP48/bNq9pXv+8KZX5Km4qfJUilWaVAZWPqkxVb9UU1Z2qbapP1DBqJmphatlq+9Uuq43Pp893ns+dXzT/5PyH6rC6iXq4+mr1w+o96pMamhq+GhkaVRqXNMY1GZpumsma5ZrnNMe0aFoLtQRa5VrntV4wlZnuzFRmJbOLOaGtru2nLdE+pN2rPa1jqLNYZ6NOs84TXZIuWzdBt1y3U3dCT0svWC9fr1HvoT5Rn62fpL9Hv1t/ysDQINpgi0GbwaihiqG/YZ5ho+FjI6qRq9Eqo1qjO8Y4Y7ZxivE+41smsImdSZJJjclNU9jU3lRgus+0zwxr5mgmNKs1u8eisNxZWaxG1qA5wzzIfKN5m/krCz2LWIudFt0WXyztLFMt6ywfWSlZBVhttOqw+sPaxJprXWN9x4Zq42Ozzqbd5rWtqS3fdr/tfTuaXbDdFrtOu8/2DvYi+yb7MQc9h3iHvQ732HR2KLuEfdUR6+jhuM7xjOMHJ3snsdNJp9+dWc4pzg3OowsMF/AX1C0YctFx4bgccpEuZC6MX3hwodRV25XjWuv6zE3Xjed2xG3E3dg92f24+ysPSw+RR4vHlKeT5xrPC16Il69XkVevt5L3Yu9q76c+Oj6JPo0+E752vqt9L/hh/QL9dvrd89fw5/rX+08EOASsCegKpARGBFYHPgsyCRIFdQTDwQHBu4IfL9JfJFzUFgJC/EN2hTwJNQxdFfpzGC4sNKwm7Hm4VXh+eHcELWJFREPEu0iPyNLIR4uNFksWd0bJR8VF1UdNRXtFl0VLl1gsWbPkRoxajCCmPRYfGxV7JHZyqffS3UuH4+ziCuPuLjNclrPs2nK15anLz66QX8FZcSoeGx8d3xD/iRPCqeVMrvRfuXflBNeTu4f7kufGK+eN8V34ZfyRBJeEsoTRRJfEXYljSa5JFUnjAk9BteB1sl/ygeSplJCUoykzqdGpzWmEtPi000IlYYqwK10zPSe9L8M0ozBDuspp1e5VE6JA0ZFMKHNZZruYjv5M9UiMJJslg1kLs2qy3mdHZZ/KUcwR5vTkmuRuyx3J88n7fjVmNXd1Z752/ob8wTXuaw6thdauXNu5Tnddwbrh9b7rj20gbUjZ8MtGy41lG99uit7UUaBRsL5gaLPv5sZCuUJR4b0tzlsObMVsFWzt3WazrWrblyJe0fViy+KK4k8l3JLr31l9V/ndzPaE7b2l9qX7d+B2CHfc3em681iZYlle2dCu4F2t5czyovK3u1fsvlZhW3FgD2mPZI+0MqiyvUqvakfVp+qk6oEaj5rmvep7t+2d2sfb17/fbX/TAY0DxQc+HhQcvH/I91BrrUFtxWHc4azDz+ui6rq/Z39ff0TtSPGRz0eFR6XHwo911TvU1zeoN5Q2wo2SxrHjccdv/eD1Q3sTq+lQM6O5+AQ4ITnx4sf4H++eDDzZeYp9qukn/Z/2ttBailqh1tzWibakNml7THvf6YDTnR3OHS0/m/989Iz2mZqzymdLz5HOFZybOZ93fvJCxoXxi4kXhzpXdD66tOTSna6wrt7LgZevXvG5cqnbvfv8VZerZ645XTt9nX297Yb9jdYeu56WX+x+aem172296XCz/ZbjrY6+BX3n+l37L972un3ljv+dGwOLBvruLr57/17cPel93v3RB6kPXj/Mejj9aP1j7OOiJwpPKp6qP6391fjXZqm99Oyg12DPs4hnj4a4Qy//lfmvT8MFz6nPK0a0RupHrUfPjPmM3Xqx9MXwy4yX0+OFvyn+tveV0auffnf7vWdiycTwa9HrmT9K3qi+OfrW9m3nZOjk03dp76anit6rvj/2gf2h+2P0x5Hp7E/4T5WfjT93fAn88ngmbWbm3/eE8/syOll+AAAACXBIWXMAAAsTAAALEwEAmpwYAAADqGlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iWE1QIENvcmUgNS40LjAiPgogICA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgogICAgICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIgogICAgICAgICAgICB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOnRpZmY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vdGlmZi8xLjAvIgogICAgICAgICAgICB4bWxuczpleGlmPSJodHRwOi8vbnMuYWRvYmUuY29tL2V4aWYvMS4wLyI+CiAgICAgICAgIDx4bXA6TW9kaWZ5RGF0ZT4yMDE1LTA0LTIxVDEyOjA0OjE0PC94bXA6TW9kaWZ5RGF0ZT4KICAgICAgICAgPHhtcDpDcmVhdG9yVG9vbD5QaXhlbG1hdG9yIDMuMy4xPC94bXA6Q3JlYXRvclRvb2w+CiAgICAgICAgIDx0aWZmOk9yaWVudGF0aW9uPjE8L3RpZmY6T3JpZW50YXRpb24+CiAgICAgICAgIDx0aWZmOkNvbXByZXNzaW9uPjU8L3RpZmY6Q29tcHJlc3Npb24+CiAgICAgICAgIDx0aWZmOlJlc29sdXRpb25Vbml0PjI8L3RpZmY6UmVzb2x1dGlvblVuaXQ+CiAgICAgICAgIDx0aWZmOllSZXNvbHV0aW9uPjcyPC90aWZmOllSZXNvbHV0aW9uPgogICAgICAgICA8dGlmZjpYUmVzb2x1dGlvbj43MjwvdGlmZjpYUmVzb2x1dGlvbj4KICAgICAgICAgPGV4aWY6UGl4ZWxYRGltZW5zaW9uPjY0PC9leGlmOlBpeGVsWERpbWVuc2lvbj4KICAgICAgICAgPGV4aWY6Q29sb3JTcGFjZT4xPC9leGlmOkNvbG9yU3BhY2U+CiAgICAgICAgIDxleGlmOlBpeGVsWURpbWVuc2lvbj42NDwvZXhpZjpQaXhlbFlEaW1lbnNpb24+CiAgICAgIDwvcmRmOkRlc2NyaXB0aW9uPgogICA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgrreGHBAAADdElEQVR4Ae2bP2/TQBjGcSpBBxhBShEZMrAhsTB1Srt1AKkTLAh1KZ1YO/ULIJWv0I2tEgxshAkJlQXBxpAhiEbACEOLRMLvcX2W7ThxFMWJ7Tev9MT/znfv89x7Z8d3513K2QaDwTWK2ARNUAdrEehY1gOnEei4A956nvebbbkM0nWwC96AMzCt6V7lobycWMUUAwdXwTPwAfTBrE15Km+VsVoYFXCmBp6ALpiXqSyVWVuoEDiwBT6DRZnK3pq7CBTaAO1FsU4pV7405iIEBa2DHylOLPqUfFrPVQQK2AHni2Y6pnz5tjNzEch0BRyOKbhol+TryiRCeFmJgoyOSXc/K23Brr/Gn21epP6N82uSx8hzMigbeXGWz/J9eqP21ebLbmP7hJFNANbqUdvg8vQSFuLOv3ixQVN4n+ZNqgCQ1zP1I7iRdlMJz/3E53uI0E36PqoPOCJhVciLs7gcaSdpQwJQ+3q1bCUTVuC4FXCLUYk1ARJIkE/gTixVdQ6+QOUuTaHvKCUj4DEXqkpenMVNHEMLI4Da13/sr+BWeLWaO9+gdZsoOBO9aAQ85bjq5MVZHHe1I4sK8PDilInfR46l3wQIf31v+w7CJuESVHQ7gNdNmkHPRYDem62QV52Kq///xgnwQGeNmc/ZI/z13f4XuGJMgHP4XlcEaNDCGnnVtThvSoCmjoxaUwJoqMqqrUmAYg855Vs19WUEILDpJqDHoIafr+YbaYXN/Y+agF4LrZr/AaRnlT28/f8Cmplh1U7VBJYCWK1+Vb4iwHwf0DEcAZ3l32E+C+lFqG0wCtrirj5A9upiY+rX57z8KKo619dRNieG6v8k4BwbF3hpSICQa/gp3PzQGCGhsbIDA1FwEHD1qYYRoCOiQE8Fu8PjKNNHgH2JUVHbDziG9GIR4M4SCXoxarnjimzfQX4jyWWUAA0S2p0khVJdBNgGmmJWdhMHzRgVpyFTp5dq3KB5dXupF8t1ci/gMp3X9AdlmiSNuzE7zGKd2gdEbyI7zbo+Bv54evRawfdnM1ma8NFsa/UHLwpOOOqefM2cKR69YaJ9osHmgomoOohgd8mMEwIR7C6aciJoixA2l80lRKghhM2FkwkhbC6djYrg9omI0iyeznwRcqSm3SKGpuFpJloTaDKGpuRo68Du0NJ5jVd2QO7L5/8Dc+ARuhyh4sQAAAAASUVORK5CYII='
+
+},{}],39:[function(require,module,exports){
 var THREE = require('three');
 
 module.exports = edgeView;
@@ -4748,7 +3671,7 @@ function edgeView(scene) {
   }
 }
 
-},{"three":106}],68:[function(require,module,exports){
+},{"three":78}],40:[function(require,module,exports){
 /**
  * Moves camera to given point, and stops it and given radius
  */
@@ -4773,7 +3696,7 @@ function flyTo(camera, to, radius) {
   camera.position.z = cameraEndPos.z;
 }
 
-},{"./intersect.js":71,"three":106}],69:[function(require,module,exports){
+},{"./intersect.js":43,"three":78}],41:[function(require,module,exports){
 /**
  * Gives an index of a node under mouse coordinates
  */
@@ -5026,7 +3949,7 @@ function createHitTest(domElement) {
   }
 }
 
-},{"ngraph.events":76,"three":106}],70:[function(require,module,exports){
+},{"ngraph.events":48,"three":78}],42:[function(require,module,exports){
 var FlyControls = require('three.fly');
 var eventify = require('ngraph.events');
 var THREE = require('three');
@@ -5101,7 +4024,7 @@ function createInput(camera, graph, domElement) {
   }
 }
 
-},{"./hitTest.js":69,"ngraph.events":76,"three":106,"three.fly":104}],71:[function(require,module,exports){
+},{"./hitTest.js":41,"ngraph.events":48,"three":78,"three.fly":76}],43:[function(require,module,exports){
 module.exports = intersect;
 
 /**
@@ -5127,7 +4050,7 @@ function intersect(from, to, r) {
   };
 }
 
-},{}],72:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 var THREE = require('three');
 var particleMaterial = require('./createMaterial.js')();
 
@@ -5236,7 +4159,7 @@ function nodeView(scene) {
   }
 }
 
-},{"./createMaterial.js":65,"three":106}],73:[function(require,module,exports){
+},{"./createMaterial.js":37,"three":78}],45:[function(require,module,exports){
 /**
  * manages view for tooltips shown when user hover over a node
  */
@@ -5281,7 +4204,7 @@ function createTooltipView(container) {
   }
 }
 
-},{"element-class":74,"insert-css":75}],74:[function(require,module,exports){
+},{"element-class":46,"insert-css":47}],46:[function(require,module,exports){
 module.exports = function(opts) {
   return new ElementClass(opts)
 }
@@ -5335,7 +4258,7 @@ ElementClass.prototype.has = function(className) {
   return indexOf(classes, className) > -1
 }
 
-},{}],75:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 var inserted = {};
 
 module.exports = function (css, options) {
@@ -5359,9 +4282,9 @@ module.exports = function (css, options) {
     }
 };
 
-},{}],76:[function(require,module,exports){
-arguments[4][61][0].apply(exports,arguments)
-},{"dup":61}],77:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
+arguments[4][33][0].apply(exports,arguments)
+},{"dup":33}],49:[function(require,module,exports){
 /**
  * Creates a force based layout that can be switched between 3d and 2d modes
  * Layout is used by ngraph.pixel
@@ -5495,59 +4418,797 @@ function createLayout(graph, options) {
   }
 }
 
-},{"ngraph.events":76,"ngraph.forcelayout3d":78}],78:[function(require,module,exports){
-arguments[4][4][0].apply(exports,arguments)
-},{"./lib/bounds":79,"./lib/createBody":80,"./lib/dragForce":81,"./lib/eulerIntegrator":82,"./lib/springForce":83,"dup":4,"ngraph.forcelayout":85,"ngraph.merge":97,"ngraph.quadtreebh3d":99}],79:[function(require,module,exports){
-arguments[4][5][0].apply(exports,arguments)
-},{"dup":5,"ngraph.random":103}],80:[function(require,module,exports){
-arguments[4][6][0].apply(exports,arguments)
-},{"dup":6,"ngraph.physics.primitives":98}],81:[function(require,module,exports){
-arguments[4][7][0].apply(exports,arguments)
-},{"dup":7,"ngraph.expose":84,"ngraph.merge":97}],82:[function(require,module,exports){
-arguments[4][8][0].apply(exports,arguments)
-},{"dup":8}],83:[function(require,module,exports){
-arguments[4][9][0].apply(exports,arguments)
-},{"dup":9,"ngraph.expose":84,"ngraph.merge":97,"ngraph.random":103}],84:[function(require,module,exports){
-arguments[4][10][0].apply(exports,arguments)
-},{"dup":10}],85:[function(require,module,exports){
-arguments[4][11][0].apply(exports,arguments)
-},{"dup":11,"ngraph.physics.simulator":86}],86:[function(require,module,exports){
-arguments[4][12][0].apply(exports,arguments)
-},{"./lib/bounds":87,"./lib/createBody":88,"./lib/dragForce":89,"./lib/eulerIntegrator":90,"./lib/spring":91,"./lib/springForce":92,"dup":12,"ngraph.expose":84,"ngraph.merge":97,"ngraph.quadtreebh":93}],87:[function(require,module,exports){
-arguments[4][13][0].apply(exports,arguments)
-},{"dup":13,"ngraph.random":103}],88:[function(require,module,exports){
-arguments[4][14][0].apply(exports,arguments)
-},{"dup":14,"ngraph.physics.primitives":98}],89:[function(require,module,exports){
+},{"ngraph.events":48,"ngraph.forcelayout3d":50}],50:[function(require,module,exports){
+/**
+ * This module provides all required forces to regular ngraph.physics.simulator
+ * to make it 3D simulator. Ideally ngraph.physics.simulator should operate
+ * with vectors, but on practices that showed performance decrease... Maybe
+ * I was doing it wrong, will see if I can refactor/throw away this module.
+ */
+module.exports = createLayout;
+createLayout.get2dLayout = require('ngraph.forcelayout');
+
+function createLayout(graph, physicsSettings) {
+  var merge = require('ngraph.merge');
+  physicsSettings = merge(physicsSettings, {
+        createQuadTree: require('ngraph.quadtreebh3d'),
+        createBounds: require('./lib/bounds'),
+        createDragForce: require('./lib/dragForce'),
+        createSpringForce: require('./lib/springForce'),
+        integrator: require('./lib/eulerIntegrator'),
+        createBody: require('./lib/createBody')
+      });
+
+  return createLayout.get2dLayout(graph, physicsSettings);
+}
+
+},{"./lib/bounds":51,"./lib/createBody":52,"./lib/dragForce":53,"./lib/eulerIntegrator":54,"./lib/springForce":55,"ngraph.forcelayout":57,"ngraph.merge":69,"ngraph.quadtreebh3d":71}],51:[function(require,module,exports){
+module.exports = function (bodies, settings) {
+  var random = require('ngraph.random').random(42);
+  var boundingBox =  { x1: 0, y1: 0, z1: 0, x2: 0, y2: 0, z2: 0 };
+
+  return {
+    box: boundingBox,
+
+    update: updateBoundingBox,
+
+    reset : function () {
+      boundingBox.x1 = boundingBox.y1 = 0;
+      boundingBox.x2 = boundingBox.y2 = 0;
+      boundingBox.z1 = boundingBox.z2 = 0;
+    },
+
+    getBestNewPosition: function (neighbors) {
+      var graphRect = boundingBox;
+
+      var baseX = 0, baseY = 0, baseZ = 0;
+
+      if (neighbors.length) {
+        for (var i = 0; i < neighbors.length; ++i) {
+          baseX += neighbors[i].pos.x;
+          baseY += neighbors[i].pos.y;
+          baseZ += neighbors[i].pos.z;
+        }
+
+        baseX /= neighbors.length;
+        baseY /= neighbors.length;
+        baseZ /= neighbors.length;
+      } else {
+        baseX = (graphRect.x1 + graphRect.x2) / 2;
+        baseY = (graphRect.y1 + graphRect.y2) / 2;
+        baseZ = (graphRect.z1 + graphRect.z2) / 2;
+      }
+
+      var springLength = settings.springLength;
+      return {
+        x: baseX + random.next(springLength) - springLength / 2,
+        y: baseY + random.next(springLength) - springLength / 2,
+        z: baseZ + random.next(springLength) - springLength / 2
+      };
+    }
+  };
+
+  function updateBoundingBox() {
+    var i = bodies.length;
+    if (i === 0) { return; } // don't have to wory here.
+
+    var x1 = Number.MAX_VALUE,
+        y1 = Number.MAX_VALUE,
+        z1 = Number.MAX_VALUE,
+        x2 = Number.MIN_VALUE,
+        y2 = Number.MIN_VALUE,
+        z2 = Number.MIN_VALUE;
+
+    while(i--) {
+      // this is O(n), could it be done faster with quadtree?
+      // how about pinned nodes?
+      var body = bodies[i];
+      if (body.isPinned) {
+        body.pos.x = body.prevPos.x;
+        body.pos.y = body.prevPos.y;
+        body.pos.z = body.prevPos.z;
+      } else {
+        body.prevPos.x = body.pos.x;
+        body.prevPos.y = body.pos.y;
+        body.prevPos.z = body.pos.z;
+      }
+      if (body.pos.x < x1) {
+        x1 = body.pos.x;
+      }
+      if (body.pos.x > x2) {
+        x2 = body.pos.x;
+      }
+      if (body.pos.y < y1) {
+        y1 = body.pos.y;
+      }
+      if (body.pos.y > y2) {
+        y2 = body.pos.y;
+      }
+      if (body.pos.z < z1) {
+        z1 = body.pos.z;
+      }
+      if (body.pos.z > z2) {
+        z2 = body.pos.z;
+      }
+    }
+
+    boundingBox.x1 = x1;
+    boundingBox.x2 = x2;
+    boundingBox.y1 = y1;
+    boundingBox.y2 = y2;
+    boundingBox.z1 = z1;
+    boundingBox.z2 = z2;
+  }
+};
+
+},{"ngraph.random":75}],52:[function(require,module,exports){
+var physics = require('ngraph.physics.primitives');
+
+module.exports = function(pos) {
+  return new physics.Body3d(pos);
+}
+
+},{"ngraph.physics.primitives":70}],53:[function(require,module,exports){
+/**
+ * Represents 3d drag force, which reduces force value on each step by given
+ * coefficient.
+ *
+ * @param {Object} options for the drag force
+ * @param {Number=} options.dragCoeff drag force coefficient. 0.1 by default
+ */
+module.exports = function (options) {
+  var merge = require('ngraph.merge'),
+      expose = require('ngraph.expose');
+
+  options = merge(options, {
+    dragCoeff: 0.02
+  });
+
+  var api = {
+    update : function (body) {
+      body.force.x -= options.dragCoeff * body.velocity.x;
+      body.force.y -= options.dragCoeff * body.velocity.y;
+      body.force.z -= options.dragCoeff * body.velocity.z;
+    }
+  };
+
+  // let easy access to dragCoeff:
+  expose(options, api, ['dragCoeff']);
+
+  return api;
+};
+
+},{"ngraph.expose":56,"ngraph.merge":69}],54:[function(require,module,exports){
+/**
+ * Performs 3d forces integration, using given timestep. Uses Euler method to solve
+ * differential equation (http://en.wikipedia.org/wiki/Euler_method ).
+ *
+ * @returns {Number} squared distance of total position updates.
+ */
+
+module.exports = integrate;
+
+function integrate(bodies, timeStep) {
+  var dx = 0, tx = 0,
+      dy = 0, ty = 0,
+      dz = 0, tz = 0,
+      i,
+      max = bodies.length;
+
+  for (i = 0; i < max; ++i) {
+    var body = bodies[i],
+        coeff = timeStep / body.mass;
+
+    body.velocity.x += coeff * body.force.x;
+    body.velocity.y += coeff * body.force.y;
+    body.velocity.z += coeff * body.force.z;
+
+    var vx = body.velocity.x,
+        vy = body.velocity.y,
+        vz = body.velocity.z,
+        v = Math.sqrt(vx * vx + vy * vy + vz * vz);
+
+    if (v > 1) {
+      body.velocity.x = vx / v;
+      body.velocity.y = vy / v;
+      body.velocity.z = vz / v;
+    }
+
+    dx = timeStep * body.velocity.x;
+    dy = timeStep * body.velocity.y;
+    dz = timeStep * body.velocity.z;
+
+    body.pos.x += dx;
+    body.pos.y += dy;
+    body.pos.z += dz;
+
+    tx += Math.abs(dx); ty += Math.abs(dy); tz += Math.abs(dz);
+  }
+
+  return (tx * tx + ty * ty + tz * tz)/bodies.length;
+}
+
+},{}],55:[function(require,module,exports){
+/**
+ * Represents 3d spring force, which updates forces acting on two bodies, conntected
+ * by a spring.
+ *
+ * @param {Object} options for the spring force
+ * @param {Number=} options.springCoeff spring force coefficient.
+ * @param {Number=} options.springLength desired length of a spring at rest.
+ */
+module.exports = function (options) {
+  var merge = require('ngraph.merge');
+  var random = require('ngraph.random').random(42);
+  var expose = require('ngraph.expose');
+
+  options = merge(options, {
+    springCoeff: 0.0002,
+    springLength: 80
+  });
+
+  var api = {
+    /**
+     * Upsates forces acting on a spring
+     */
+    update : function (spring) {
+      var body1 = spring.from,
+          body2 = spring.to,
+          length = spring.length < 0 ? options.springLength : spring.length,
+          dx = body2.pos.x - body1.pos.x,
+          dy = body2.pos.y - body1.pos.y,
+          dz = body2.pos.z - body1.pos.z,
+          r = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+      if (r === 0) {
+          dx = (random.nextDouble() - 0.5) / 50;
+          dy = (random.nextDouble() - 0.5) / 50;
+          dz = (random.nextDouble() - 0.5) / 50;
+          r = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      }
+
+      var d = r - length;
+      var coeff = ((!spring.coeff || spring.coeff < 0) ? options.springCoeff : spring.coeff) * d / r * spring.weight;
+
+      body1.force.x += coeff * dx;
+      body1.force.y += coeff * dy;
+      body1.force.z += coeff * dz;
+
+      body2.force.x -= coeff * dx;
+      body2.force.y -= coeff * dy;
+      body2.force.z -= coeff * dz;
+    }
+  };
+
+  expose(options, api, ['springCoeff', 'springLength']);
+  return api;
+}
+
+},{"ngraph.expose":56,"ngraph.merge":69,"ngraph.random":75}],56:[function(require,module,exports){
 arguments[4][15][0].apply(exports,arguments)
-},{"dup":15,"ngraph.expose":84,"ngraph.merge":97}],90:[function(require,module,exports){
+},{"dup":15}],57:[function(require,module,exports){
 arguments[4][16][0].apply(exports,arguments)
-},{"dup":16}],91:[function(require,module,exports){
+},{"dup":16,"ngraph.physics.simulator":58}],58:[function(require,module,exports){
 arguments[4][17][0].apply(exports,arguments)
-},{"dup":17}],92:[function(require,module,exports){
+},{"./lib/bounds":59,"./lib/createBody":60,"./lib/dragForce":61,"./lib/eulerIntegrator":62,"./lib/spring":63,"./lib/springForce":64,"dup":17,"ngraph.expose":56,"ngraph.merge":69,"ngraph.quadtreebh":65}],59:[function(require,module,exports){
 arguments[4][18][0].apply(exports,arguments)
-},{"dup":18,"ngraph.expose":84,"ngraph.merge":97,"ngraph.random":103}],93:[function(require,module,exports){
+},{"dup":18,"ngraph.random":75}],60:[function(require,module,exports){
 arguments[4][19][0].apply(exports,arguments)
-},{"./insertStack":94,"./isSamePosition":95,"./node":96,"dup":19,"ngraph.random":103}],94:[function(require,module,exports){
+},{"dup":19,"ngraph.physics.primitives":70}],61:[function(require,module,exports){
 arguments[4][20][0].apply(exports,arguments)
-},{"dup":20}],95:[function(require,module,exports){
+},{"dup":20,"ngraph.expose":56,"ngraph.merge":69}],62:[function(require,module,exports){
 arguments[4][21][0].apply(exports,arguments)
-},{"dup":21}],96:[function(require,module,exports){
+},{"dup":21}],63:[function(require,module,exports){
 arguments[4][22][0].apply(exports,arguments)
-},{"dup":22}],97:[function(require,module,exports){
+},{"dup":22}],64:[function(require,module,exports){
 arguments[4][23][0].apply(exports,arguments)
-},{"dup":23}],98:[function(require,module,exports){
-arguments[4][24][0].apply(exports,arguments)
-},{"dup":24}],99:[function(require,module,exports){
+},{"dup":23,"ngraph.expose":56,"ngraph.merge":69,"ngraph.random":75}],65:[function(require,module,exports){
 arguments[4][25][0].apply(exports,arguments)
-},{"./insertStack":100,"./isSamePosition":101,"./node":102,"dup":25,"ngraph.random":103}],100:[function(require,module,exports){
+},{"./insertStack":66,"./isSamePosition":67,"./node":68,"dup":25,"ngraph.random":75}],66:[function(require,module,exports){
 arguments[4][26][0].apply(exports,arguments)
-},{"dup":26}],101:[function(require,module,exports){
+},{"dup":26}],67:[function(require,module,exports){
 arguments[4][27][0].apply(exports,arguments)
-},{"dup":27}],102:[function(require,module,exports){
+},{"dup":27}],68:[function(require,module,exports){
 arguments[4][28][0].apply(exports,arguments)
-},{"dup":28}],103:[function(require,module,exports){
+},{"dup":28}],69:[function(require,module,exports){
 arguments[4][29][0].apply(exports,arguments)
-},{"dup":29}],104:[function(require,module,exports){
+},{"dup":29}],70:[function(require,module,exports){
+arguments[4][24][0].apply(exports,arguments)
+},{"dup":24}],71:[function(require,module,exports){
+/**
+ * This is Barnes Hut simulation algorithm for 3d case. Implementation
+ * is highly optimized (avoids recusion and gc pressure)
+ *
+ * http://www.cs.princeton.edu/courses/archive/fall03/cs126/assignments/barnes-hut.html
+ *
+ * NOTE: This module duplicates a lot of code from 2d case. Primary reason for
+ * this is performance. Every time I tried to abstract away vector operations
+ * I had negative impact on performance. So in this case I'm scarifying code
+ * reuse in favor of speed
+ */
+
+module.exports = function(options) {
+  options = options || {};
+  options.gravity = typeof options.gravity === 'number' ? options.gravity : -1;
+  options.theta = typeof options.theta === 'number' ? options.theta : 0.8;
+
+  // we require deterministic randomness here
+  var random = require('ngraph.random').random(1984),
+    Node = require('./node'),
+    InsertStack = require('./insertStack'),
+    isSamePosition = require('./isSamePosition');
+
+  var gravity = options.gravity,
+    updateQueue = [],
+    insertStack = new InsertStack(),
+    theta = options.theta,
+
+    nodesCache = [],
+    currentInCache = 0,
+    newNode = function() {
+      // To avoid pressure on GC we reuse nodes.
+      var node = nodesCache[currentInCache];
+      if (node) {
+        node.quad0 = null;
+        node.quad4 = null;
+        node.quad1 = null;
+        node.quad5 = null;
+        node.quad2 = null;
+        node.quad6 = null;
+        node.quad3 = null;
+        node.quad7 = null;
+        node.body = null;
+        node.mass = node.massX = node.massY = node.massZ = 0;
+        node.left = node.right = node.top = node.bottom = node.front = node.back = 0;
+      } else {
+        node = new Node();
+        nodesCache[currentInCache] = node;
+      }
+
+      ++currentInCache;
+      return node;
+    },
+
+    root = newNode(),
+
+    // Inserts body to the tree
+    insert = function(newBody) {
+      insertStack.reset();
+      insertStack.push(root, newBody);
+
+      while (!insertStack.isEmpty()) {
+        var stackItem = insertStack.pop(),
+          node = stackItem.node,
+          body = stackItem.body;
+
+        if (!node.body) {
+          // This is internal node. Update the total mass of the node and center-of-mass.
+          var x = body.pos.x;
+          var y = body.pos.y;
+          var z = body.pos.z;
+          node.mass += body.mass;
+          node.massX += body.mass * x;
+          node.massY += body.mass * y;
+          node.massZ += body.mass * z;
+
+          // Recursively insert the body in the appropriate quadrant.
+          // But first find the appropriate quadrant.
+          var quadIdx = 0, // Assume we are in the 0's quad.
+            left = node.left,
+            right = (node.right + left) / 2,
+            top = node.top,
+            bottom = (node.bottom + top) / 2,
+            back = node.back,
+            front = (node.front + back) / 2;
+
+          if (x > right) { // somewhere in the eastern part.
+            quadIdx += 1;
+            var oldLeft = left;
+            left = right;
+            right = right + (right - oldLeft);
+          }
+          if (y > bottom) { // and in south.
+            quadIdx += 2;
+            var oldTop = top;
+            top = bottom;
+            bottom = bottom + (bottom - oldTop);
+          }
+          if (z > front) { // and in frontal part
+            quadIdx += 4;
+            var oldBack = back;
+            back = front;
+            front = back + (back - oldBack);
+          }
+
+          var child = getChild(node, quadIdx);
+          if (!child) {
+            // The node is internal but this quadrant is not taken. Add subnode to it.
+            child = newNode();
+            child.left = left;
+            child.top = top;
+            child.right = right;
+            child.bottom = bottom;
+            child.back = back;
+            child.front = front;
+            child.body = body;
+
+            setChild(node, quadIdx, child);
+          } else {
+            // continue searching in this quadrant.
+            insertStack.push(child, body);
+          }
+        } else {
+          // We are trying to add to the leaf node.
+          // We have to convert current leaf into internal node
+          // and continue adding two nodes.
+          var oldBody = node.body;
+          node.body = null; // internal nodes do not carry bodies
+
+          if (isSamePosition(oldBody.pos, body.pos)) {
+            // Prevent infinite subdivision by bumping one node
+            // anywhere in this quadrant
+            var retriesCount = 3;
+            do {
+              var offset = random.nextDouble();
+              var dx = (node.right - node.left) * offset;
+              var dy = (node.bottom - node.top) * offset;
+              var dz = (node.front - node.back) * offset;
+
+              oldBody.pos.x = node.left + dx;
+              oldBody.pos.y = node.top + dy;
+              oldBody.pos.z = node.back + dz;
+              retriesCount -= 1;
+              // Make sure we don't bump it out of the box. If we do, next iteration should fix it
+            } while (retriesCount > 0 && isSamePosition(oldBody.pos, body.pos));
+
+            if (retriesCount === 0 && isSamePosition(oldBody.pos, body.pos)) {
+              // This is very bad, we ran out of precision.
+              // if we do not return from the method we'll get into
+              // infinite loop here. So we sacrifice correctness of layout, and keep the app running
+              // Next layout iteration should get larger bounding box in the first step and fix this
+              return;
+            }
+          }
+          // Next iteration should subdivide node further.
+          insertStack.push(node, oldBody);
+          insertStack.push(node, body);
+        }
+      }
+    },
+
+    update = function(sourceBody) {
+      var queue = updateQueue,
+        v,
+        dx, dy, dz,
+        r, fx = 0,
+        fy = 0,
+        fz = 0,
+        queueLength = 1,
+        shiftIdx = 0,
+        pushIdx = 1;
+
+      queue[0] = root;
+
+      while (queueLength) {
+        var node = queue[shiftIdx],
+          body = node.body;
+
+        queueLength -= 1;
+        shiftIdx += 1;
+        var differentBody = (body !== sourceBody);
+        if (body && differentBody) {
+          // If the current node is a leaf node (and it is not source body),
+          // calculate the force exerted by the current node on body, and add this
+          // amount to body's net force.
+          dx = body.pos.x - sourceBody.pos.x;
+          dy = body.pos.y - sourceBody.pos.y;
+          dz = body.pos.z - sourceBody.pos.z;
+          r = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+          if (r === 0) {
+            // Poor man's protection against zero distance.
+            dx = (random.nextDouble() - 0.5) / 50;
+            dy = (random.nextDouble() - 0.5) / 50;
+            dz = (random.nextDouble() - 0.5) / 50;
+            r = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          }
+
+          // This is standard gravitation force calculation but we divide
+          // by r^3 to save two operations when normalizing force vector.
+          v = gravity * body.mass * sourceBody.mass / (r * r * r);
+          fx += v * dx;
+          fy += v * dy;
+          fz += v * dz;
+        } else if (differentBody) {
+          // Otherwise, calculate the ratio s / r,  where s is the width of the region
+          // represented by the internal node, and r is the distance between the body
+          // and the node's center-of-mass
+          dx = node.massX / node.mass - sourceBody.pos.x;
+          dy = node.massY / node.mass - sourceBody.pos.y;
+          dz = node.massZ / node.mass - sourceBody.pos.z;
+
+          r = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+          if (r === 0) {
+            // Sorry about code duplication. I don't want to create many functions
+            // right away. Just want to see performance first.
+            dx = (random.nextDouble() - 0.5) / 50;
+            dy = (random.nextDouble() - 0.5) / 50;
+            dz = (random.nextDouble() - 0.5) / 50;
+            r = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          }
+
+          // If s / r < θ, treat this internal node as a single body, and calculate the
+          // force it exerts on sourceBody, and add this amount to sourceBody's net force.
+          if ((node.right - node.left) / r < theta) {
+            // in the if statement above we consider node's width only
+            // because the region was squarified during tree creation.
+            // Thus there is no difference between using width or height.
+            v = gravity * node.mass * sourceBody.mass / (r * r * r);
+            fx += v * dx;
+            fy += v * dy;
+            fz += v * dz;
+          } else {
+            // Otherwise, run the procedure recursively on each of the current node's children.
+
+            // I intentionally unfolded this loop, to save several CPU cycles.
+            if (node.quad0) {
+              queue[pushIdx] = node.quad0;
+              queueLength += 1;
+              pushIdx += 1;
+            }
+            if (node.quad1) {
+              queue[pushIdx] = node.quad1;
+              queueLength += 1;
+              pushIdx += 1;
+            }
+            if (node.quad2) {
+              queue[pushIdx] = node.quad2;
+              queueLength += 1;
+              pushIdx += 1;
+            }
+            if (node.quad3) {
+              queue[pushIdx] = node.quad3;
+              queueLength += 1;
+              pushIdx += 1;
+            }
+            if (node.quad4) {
+              queue[pushIdx] = node.quad4;
+              queueLength += 1;
+              pushIdx += 1;
+            }
+            if (node.quad5) {
+              queue[pushIdx] = node.quad5;
+              queueLength += 1;
+              pushIdx += 1;
+            }
+            if (node.quad6) {
+              queue[pushIdx] = node.quad6;
+              queueLength += 1;
+              pushIdx += 1;
+            }
+            if (node.quad7) {
+              queue[pushIdx] = node.quad7;
+              queueLength += 1;
+              pushIdx += 1;
+            }
+          }
+        }
+      }
+
+      sourceBody.force.x += fx;
+      sourceBody.force.y += fy;
+      sourceBody.force.z += fz;
+    },
+
+    insertBodies = function(bodies) {
+      var x1 = Number.MAX_VALUE,
+        y1 = Number.MAX_VALUE,
+        z1 = Number.MAX_VALUE,
+        x2 = Number.MIN_VALUE,
+        y2 = Number.MIN_VALUE,
+        z2 = Number.MIN_VALUE,
+        i,
+        max = bodies.length;
+
+      // To reduce quad tree depth we are looking for exact bounding box of all particles.
+      i = max;
+      while (i--) {
+        var pos = bodies[i].pos;
+        var x = pos.x;
+        var y = pos.y;
+        var z = pos.z;
+        if (x < x1) {
+          x1 = x;
+        }
+        if (x > x2) {
+          x2 = x;
+        }
+        if (y < y1) {
+          y1 = y;
+        }
+        if (y > y2) {
+          y2 = y;
+        }
+        if (z < z1) {
+          z1 = z;
+        }
+        if (z > z2) {
+          z2 = z;
+        }
+      }
+
+      // Squarify the bounds.
+      var maxSide = Math.max(x2 - x1, Math.max(y2 - y1, z2 - z1));
+
+      x2 = x1 + maxSide;
+      y2 = y1 + maxSide;
+      z2 = z1 + maxSide;
+
+      currentInCache = 0;
+      root = newNode();
+      root.left = x1;
+      root.right = x2;
+      root.top = y1;
+      root.bottom = y2;
+      root.back = z1;
+      root.front = z2;
+
+      i = max - 1;
+      if (i > 0) {
+        root.body = bodies[i];
+      }
+      while (i--) {
+        insert(bodies[i], root);
+      }
+    };
+
+  return {
+    insertBodies: insertBodies,
+    updateBodyForce: update,
+    options: function(newOptions) {
+      if (newOptions) {
+        if (typeof newOptions.gravity === 'number') {
+          gravity = newOptions.gravity;
+        }
+        if (typeof newOptions.theta === 'number') {
+          theta = newOptions.theta;
+        }
+
+        return this;
+      }
+
+      return {
+        gravity: gravity,
+        theta: theta
+      };
+    }
+  };
+};
+
+function getChild(node, idx) {
+  if (idx === 0) return node.quad0;
+  if (idx === 1) return node.quad1;
+  if (idx === 2) return node.quad2;
+  if (idx === 3) return node.quad3;
+  if (idx === 4) return node.quad4;
+  if (idx === 5) return node.quad5;
+  if (idx === 6) return node.quad6;
+  if (idx === 7) return node.quad7;
+  return null;
+}
+
+function setChild(node, idx, child) {
+  if (idx === 0) node.quad0 = child;
+  else if (idx === 1) node.quad1 = child;
+  else if (idx === 2) node.quad2 = child;
+  else if (idx === 3) node.quad3 = child;
+  else if (idx === 4) node.quad4 = child;
+  else if (idx === 5) node.quad5 = child;
+  else if (idx === 6) node.quad6 = child;
+  else if (idx === 7) node.quad7 = child;
+}
+
+},{"./insertStack":72,"./isSamePosition":73,"./node":74,"ngraph.random":75}],72:[function(require,module,exports){
+module.exports = InsertStack;
+
+/**
+ * Our implementation of QuadTree is non-recursive to avoid GC hit
+ * This data structure represent stack of elements
+ * which we are trying to insert into quad tree.
+ */
+function InsertStack () {
+    this.stack = [];
+    this.popIdx = 0;
+}
+
+InsertStack.prototype = {
+    isEmpty: function() {
+        return this.popIdx === 0;
+    },
+    push: function (node, body) {
+        var item = this.stack[this.popIdx];
+        if (!item) {
+            // we are trying to avoid memory pressure: create new element
+            // only when absolutely necessary
+            this.stack[this.popIdx] = new InsertStackElement(node, body);
+        } else {
+            item.node = node;
+            item.body = body;
+        }
+        ++this.popIdx;
+    },
+    pop: function () {
+        if (this.popIdx > 0) {
+            return this.stack[--this.popIdx];
+        }
+    },
+    reset: function () {
+        this.popIdx = 0;
+    }
+};
+
+function InsertStackElement(node, body) {
+    this.node = node; // QuadTree node
+    this.body = body; // physical body which needs to be inserted to node
+}
+
+},{}],73:[function(require,module,exports){
+module.exports = function isSamePosition(point1, point2) {
+    var dx = Math.abs(point1.x - point2.x);
+    var dy = Math.abs(point1.y - point2.y);
+    var dz = Math.abs(point1.z - point2.z);
+
+    return (dx < 1e-8 && dy < 1e-8 && dz < 1e-8);
+};
+
+},{}],74:[function(require,module,exports){
+/**
+ * Internal data structure to represent 3D QuadTree node
+ */
+module.exports = function Node() {
+  // body stored inside this node. In quad tree only leaf nodes (by construction)
+  // contain boides:
+  this.body = null;
+
+  // Child nodes are stored in quads. Each quad is presented by number:
+  // Behind Z median:
+  // 0 | 1
+  // -----
+  // 2 | 3
+  // In front of Z median:
+  // 4 | 5
+  // -----
+  // 6 | 7
+  this.quad0 = null;
+  this.quad1 = null;
+  this.quad2 = null;
+  this.quad3 = null;
+  this.quad4 = null;
+  this.quad5 = null;
+  this.quad6 = null;
+  this.quad7 = null;
+
+  // Total mass of current node
+  this.mass = 0;
+
+  // Center of mass coordinates
+  this.massX = 0;
+  this.massY = 0;
+  this.massZ = 0;
+
+  // bounding box coordinates
+  this.left = 0;
+  this.top = 0;
+  this.bottom = 0;
+  this.right = 0;
+  this.front = 0;
+  this.back = 0;
+};
+
+},{}],75:[function(require,module,exports){
+arguments[4][30][0].apply(exports,arguments)
+},{"dup":30}],76:[function(require,module,exports){
 /**
  * @author James Baicoianu / http://www.baicoianu.com/
  * Source: https://github.com/mrdoob/three.js/blob/master/examples/js/controls/FlyControls.js
@@ -5778,7 +5439,7 @@ function fly(camera, domElement, THREE) {
   }
 }
 
-},{"./keymap.js":105,"ngraph.events":76}],105:[function(require,module,exports){
+},{"./keymap.js":77,"ngraph.events":48}],77:[function(require,module,exports){
 /**
  * Defines default key bindings for the controls
  */
@@ -5801,7 +5462,7 @@ function createKeyMap() {
   };
 }
 
-},{}],106:[function(require,module,exports){
+},{}],78:[function(require,module,exports){
 var self = self || {};// File:src/Three.js
 
 /**
@@ -40361,7 +40022,7 @@ if (typeof exports !== 'undefined') {
   this['THREE'] = THREE;
 }
 
-},{}],107:[function(require,module,exports){
+},{}],79:[function(require,module,exports){
 /**
  * This file contains all possible configuration optins for the renderer
  */
@@ -40399,7 +40060,7 @@ function validateOptions(options) {
   return options;
 }
 
-},{"pixel.layout":77}],108:[function(require,module,exports){
+},{"pixel.layout":49}],80:[function(require,module,exports){
 /*!
 	query-string
 	Parse and stringify URL query strings
