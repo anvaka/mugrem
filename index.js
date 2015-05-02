@@ -20,7 +20,7 @@ function render(graph) {
   });
 
   var layout = renderer.layout();
-  createSettingsView(layout, dim);
+  createSettingsView(layout, renderer, dim);
 
   renderer.beforeFrame(setColors);
 
