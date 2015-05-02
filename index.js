@@ -1,6 +1,6 @@
 var createSettingsView = require('./settingsView.js');
 var getGraph = require('./lib/getGraph.js');
-var layout4 = require('./lib/pseudo4dlayout.js');
+var layout4 = require('./lib/multilayout.js');
 
 var query = require('query-string').parse(window.location.search.substring(1));
 var dim = parseInt(query.dim, 10);
