@@ -1,3 +1,4 @@
+var createSettingsView = require('./settingsView.js');
 var getGraph = require('./lib/getGraph.js');
 var layout4 = require('./lib/pseudo4dlayout.js');
 
@@ -19,13 +20,13 @@ function render(graph) {
   });
 
   var layout = renderer.layout();
+  createSettingsView(layout, dim);
 
   renderer.beforeFrame(setColors);
 
   function setColors() {
     graph.forEachNode(setSingleNodeColor);
     graph.forEachLink(setSingleLinkColor);
-
   }
 
   function setSingleNodeColor(node) {

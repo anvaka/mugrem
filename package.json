@@ -24,5 +24,8 @@
     "ngraph.pixel": "^0.1.9",
     "ngraph.serialization": "0.0.7",
     "query-string": "^1.0.0"
+  },
+  "devDependencies": {
+    "exdat": "^0.6.2"
   }
 }
