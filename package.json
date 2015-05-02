@@ -21,7 +21,7 @@
   "dependencies": {
     "ngraph.forcelayout.nd": "0.1.0",
     "ngraph.generators": "0.0.15",
-    "ngraph.pixel": "^0.1.10",
+    "ngraph.pixel": "^0.1.11",
     "ngraph.serialization": "0.0.7",
     "query-string": "^1.0.0"
   },
