@@ -130,7 +130,7 @@ function getNumber(string, defaultValue) {
 }
 
 function getGraphFromUrl(query, cb) {
-  var urlIsValid = query.url && query.url.match(/^(https?:)\/\/s3.amazonaws.com\/yasiv_uf\/out\//);
+  var urlIsValid = query.url && query.url.match(/^(https?:)?\/\/s3.amazonaws.com\/yasiv_uf\/out\//);
   var url = (urlIsValid && query.url) || '//s3.amazonaws.com/yasiv_uf/out/HB/494_bus/index.js';
 
   http.get(url, function (err, data) {
