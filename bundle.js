@@ -21,7 +21,7 @@ function render(graph) {
   });
 
   var layout = renderer.layout();
-  createSettingsView(layout, dim);
+  createSettingsView(layout, renderer, dim);
 
   renderer.beforeFrame(setColors);
 
@@ -41,7 +41,67 @@ function render(graph) {
   }
 }
 
-},{"./lib/getGraph.js":2,"./lib/pseudo4dlayout.js":4,"./settingsView.js":109,"ngraph.pixel":59,"query-string":108}],2:[function(require,module,exports){
+},{"./lib/getGraph.js":3,"./lib/pseudo4dlayout.js":5,"./settingsView.js":110,"ngraph.pixel":60,"query-string":109}],2:[function(require,module,exports){
+module.exports = createMapping;
+function createMapping(gui, layout, dim) {
+  var folder = gui.addFolder('Layout dimensions mapping');
+  var possibleMapping = ['x axis', 'y axis', 'z axis', 'node color', 'none'];
+  var none = possibleMapping[4];
+  var model = {};
+  var controllers = {};
+  for (var i = 0; i < dim; ++i) {
+    if (i < 4) {
+      model[i] = possibleMapping[i];
+    } else {
+      model[i] = none;
+    }
+    controllers[i] = folder.add(model, i, possibleMapping).name(i + ' dimension').onChange(changeMapping);
+  }
+
+  reconfigureLayout(model);
+  folder.open();
+
+  function changeMapping(newValue) {
+    toggle(newValue, this.property, this.initialValue);
+    this.initialValue = newValue;
+    reconfigureLayout(model);
+    gui.update();
+  }
+
+  function toggle(value, currentProperty, swapWith) {
+    for (var key in model) {
+      if (model.hasOwnProperty(key)) {
+        if (model[key] === value && key != currentProperty) {
+          model[key] = swapWith;
+          controllers[key].initialValue = swapWith;
+        }
+      }
+    }
+  }
+
+  function reconfigureLayout(model) {
+    layout.config(toFlatMap(model));
+  }
+
+  function toFlatMap(model) {
+    var keys = Object.keys(model);
+    var map = {
+      x: get('x axis'),
+      y: get('y axis'),
+      z: get('z axis'),
+      t: get('node color', -1)
+    };
+
+    return map;
+
+    function get(name, defaultValue) {
+      defaultValue = defaultValue !== undefined ? defaultValue : 0;
+      return keys.filter(function(key) {return model[key] === name; })[0] || defaultValue;
+    }
+  }
+}
+
+},{}],3:[function(require,module,exports){
 var http = require('./http.js');
 
 module.exports = getGraph;
@@ -70,8 +130,8 @@ function getNumber(string, defaultValue) {
 }
 
 function getGraphFromUrl(query, cb) {
-  var urlIsValid = query.url && query.url.match(/^http:\/\/s3.amazonaws.com\/yasiv_uf\/out\//);
-  var url = (urlIsValid && query.url) || 'http://s3.amazonaws.com/yasiv_uf/out/HB/494_bus/index.js';
+  var urlIsValid = query.url && query.url.match(/^(https?:)\/\/s3.amazonaws.com\/yasiv_uf\/out\//);
+  var url = (urlIsValid && query.url) || '//s3.amazonaws.com/yasiv_uf/out/HB/494_bus/index.js';
 
   http.get(url, function (err, data) {
     if (err) return;
@@ -79,7 +139,7 @@ function getGraphFromUrl(query, cb) {
   });
 }
 
-},{"./http.js":3,"ngraph.generators":55,"ngraph.serialization/mtx":104}],3:[function(require,module,exports){
+},{"./http.js":4,"ngraph.generators":56,"ngraph.serialization/mtx":105}],4:[function(require,module,exports){
 exports.get = function get(url, cb) {
   var request = new XMLHttpRequest();
   request.open('GET', url, true);
@@ -98,7 +158,7 @@ exports.get = function get(url, cb) {
   request.send();
 };
 
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 module.exports = createLayout;
 var layout4d = require('ngraph.forcelayout.nd');
 
@@ -172,7 +232,7 @@ function createLayout(graph, options) {
   }
 }
 
-},{"ngraph.forcelayout.nd":27}],5:[function(require,module,exports){
+},{"ngraph.forcelayout.nd":28}],6:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -355,7 +415,7 @@ function recalculateHSV(color) {
 
 }
 
-},{"../utils/common.js":22,"./interpret.js":6,"./math.js":7,"./toString.js":8}],6:[function(require,module,exports){
+},{"../utils/common.js":23,"./interpret.js":7,"./math.js":8,"./toString.js":9}],7:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -698,7 +758,7 @@ function createInterpert() {
 
 }
 
-},{"../utils/common.js":22,"./toString.js":8}],7:[function(require,module,exports){
+},{"../utils/common.js":23,"./toString.js":9}],8:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -799,7 +859,7 @@ function math() {
   };
 }
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -836,7 +896,7 @@ function toString(color) {
 
 }
 
-},{"../utils/common.js":22}],9:[function(require,module,exports){
+},{"../utils/common.js":23}],10:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -920,7 +980,7 @@ common.extend(
   }
 );
 
-},{"../dom/dom.js":20,"../utils/common.js":22,"./Controller.js":11}],10:[function(require,module,exports){
+},{"../dom/dom.js":21,"../utils/common.js":23,"./Controller.js":12}],11:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -1241,7 +1301,7 @@ function hueGradient(elem) {
   elem.style.cssText += 'background: linear-gradient(top,  #ff0000 0%,#ff00ff 17%,#0000ff 34%,#00ffff 50%,#00ff00 67%,#ffff00 84%,#ff0000 100%);'
 }
 
-},{"../color/Color.js":5,"../color/interpret.js":6,"../dom/dom.js":20,"../utils/common.js":22,"./Controller.js":11}],11:[function(require,module,exports){
+},{"../color/Color.js":6,"../color/interpret.js":7,"../dom/dom.js":21,"../utils/common.js":23,"./Controller.js":12}],12:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -1382,7 +1442,7 @@ common.extend(
 );
 
 
-},{"../utils/common.js":22,"../utils/escapeHtml.js":24}],12:[function(require,module,exports){
+},{"../utils/common.js":23,"../utils/escapeHtml.js":25}],13:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -1452,7 +1512,7 @@ common.extend(
 
 );
 
-},{"../dom/dom.js":20,"../utils/common.js":22,"./Controller.js":11}],13:[function(require,module,exports){
+},{"../dom/dom.js":21,"../utils/common.js":23,"./Controller.js":12}],14:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -1594,7 +1654,7 @@ function numDecimals(x) {
   }
 }
 
-},{"../utils/common.js":22,"./Controller.js":11}],14:[function(require,module,exports){
+},{"../utils/common.js":23,"./Controller.js":12}],15:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -1725,7 +1785,7 @@ function roundToDecimal(value, decimals) {
   return Math.round(value * tenTo) / tenTo;
 }
 
-},{"../dom/dom.js":20,"../utils/common.js":22,"./NumberController.js":13}],15:[function(require,module,exports){
+},{"../dom/dom.js":21,"../utils/common.js":23,"./NumberController.js":14}],16:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -1855,7 +1915,7 @@ function map(v, i1, i2, o1, o2) {
   return o1 + (o2 - o1) * ((v - i1) / (i2 - i1));
 }
 
-},{"../dom/dom.js":20,"../utils/common.js":22,"../utils/css.js":23,"./NumberController.js":13}],16:[function(require,module,exports){
+},{"../dom/dom.js":21,"../utils/common.js":23,"../utils/css.js":24,"./NumberController.js":14}],17:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -1955,7 +2015,7 @@ common.extend(
 
 );
 
-},{"../dom/dom.js":20,"../utils/common.js":22,"./Controller.js":11}],17:[function(require,module,exports){
+},{"../dom/dom.js":21,"../utils/common.js":23,"./Controller.js":12}],18:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -2042,7 +2102,7 @@ common.extend(
 
 );
 
-},{"../dom/dom.js":20,"../utils/common.js":22,"./Controller.js":11}],18:[function(require,module,exports){
+},{"../dom/dom.js":21,"../utils/common.js":23,"./Controller.js":12}],19:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -2108,7 +2168,7 @@ function factory(object, property) {
 
 }
 
-},{"../utils/common.js":22,"./BooleanController.js":9,"./FunctionController.js":12,"./NumberControllerBox.js":14,"./NumberControllerSlider.js":15,"./OptionController.js":16,"./StringController.js":17}],19:[function(require,module,exports){
+},{"../utils/common.js":23,"./BooleanController.js":10,"./FunctionController.js":13,"./NumberControllerBox.js":15,"./NumberControllerSlider.js":16,"./OptionController.js":17,"./StringController.js":18}],20:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -2222,7 +2282,7 @@ function lockScroll(e) {
   console.log(e);
 }
 
-},{"../utils/common.js":22,"./dom.js":20}],20:[function(require,module,exports){
+},{"../utils/common.js":23,"./dom.js":21}],21:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -2509,7 +2569,7 @@ var dom = {
 
 module.exports = dom;
 
-},{"../utils/common.js":22}],21:[function(require,module,exports){
+},{"../utils/common.js":23}],22:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -3911,7 +3971,7 @@ function createGUI() {
   return GUI;
 }
 
-},{"../controllers/BooleanController.js":9,"../controllers/ColorController.js":10,"../controllers/Controller.js":11,"../controllers/FunctionController.js":12,"../controllers/NumberControllerBox.js":14,"../controllers/NumberControllerSlider.js":15,"../controllers/factory.js":18,"../dom/CenteredDiv.js":19,"../dom/dom.js":20,"../utils/common.js":22,"../utils/css.js":23,"../utils/requestAnimationFrame.js":25}],22:[function(require,module,exports){
+},{"../controllers/BooleanController.js":10,"../controllers/ColorController.js":11,"../controllers/Controller.js":12,"../controllers/FunctionController.js":13,"../controllers/NumberControllerBox.js":15,"../controllers/NumberControllerSlider.js":16,"../controllers/factory.js":19,"../dom/CenteredDiv.js":20,"../dom/dom.js":21,"../utils/common.js":23,"../utils/css.js":24,"../utils/requestAnimationFrame.js":26}],23:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -4053,7 +4113,7 @@ function common() {
   };
 }
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -4088,7 +4148,7 @@ function css() {
   };
 }
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 module.exports = escape;
 
 var entityMap = {
@@ -4106,7 +4166,7 @@ function escape(string) {
   });
 }
 
-},{}],25:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 /**
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -4139,7 +4199,7 @@ function raf() {
       };
 }
 
-},{}],26:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 /** @license
  * dat-gui JavaScript Controller Library
  * http://code.google.com/p/dat-gui
@@ -4179,7 +4239,7 @@ module.exports = {
   GUI: require('./dat/gui/GUI.js')
 };
 
-},{"./dat/color/Color.js":5,"./dat/color/interpret.js":6,"./dat/color/math.js":7,"./dat/controllers/BooleanController.js":9,"./dat/controllers/ColorController.js":10,"./dat/controllers/Controller.js":11,"./dat/controllers/FunctionController.js":12,"./dat/controllers/NumberController.js":13,"./dat/controllers/NumberControllerBox.js":14,"./dat/controllers/NumberControllerSlider.js":15,"./dat/controllers/OptionController.js":16,"./dat/controllers/StringController.js":17,"./dat/dom/dom.js":20,"./dat/gui/GUI.js":21}],27:[function(require,module,exports){
+},{"./dat/color/Color.js":6,"./dat/color/interpret.js":7,"./dat/color/math.js":8,"./dat/controllers/BooleanController.js":10,"./dat/controllers/ColorController.js":11,"./dat/controllers/Controller.js":12,"./dat/controllers/FunctionController.js":13,"./dat/controllers/NumberController.js":14,"./dat/controllers/NumberControllerBox.js":15,"./dat/controllers/NumberControllerSlider.js":16,"./dat/controllers/OptionController.js":17,"./dat/controllers/StringController.js":18,"./dat/dom/dom.js":21,"./dat/gui/GUI.js":22}],28:[function(require,module,exports){
 /**
  * N-dimensional force based graph layout
  */
@@ -4201,7 +4261,7 @@ function createLayout(graph, physicsSettings) {
   return createLayout.get2dLayout(graph, physicsSettings);
 }
 
-},{"./lib/bounds":28,"./lib/createBody":29,"./lib/dragForce":30,"./lib/eulerIntegrator":31,"./lib/orthantTree/index.js":32,"./lib/springForce":37,"ngraph.forcelayout":40,"ngraph.merge":53}],28:[function(require,module,exports){
+},{"./lib/bounds":29,"./lib/createBody":30,"./lib/dragForce":31,"./lib/eulerIntegrator":32,"./lib/orthantTree/index.js":33,"./lib/springForce":38,"ngraph.forcelayout":41,"ngraph.merge":54}],29:[function(require,module,exports){
 var Vector = require('./vector.js');
 
 module.exports = bounds;
@@ -4277,7 +4337,7 @@ function bounds(bodies, settings) {
   }
 }
 
-},{"./vector.js":38,"ngraph.random":54}],29:[function(require,module,exports){
+},{"./vector.js":39,"ngraph.random":55}],30:[function(require,module,exports){
 var Vector = require('./vector.js');
 
 module.exports = createBody;
@@ -4300,7 +4360,7 @@ Body.prototype.setPosition = function () {
   }
 };
 
-},{"./vector.js":38}],30:[function(require,module,exports){
+},{"./vector.js":39}],31:[function(require,module,exports){
 /**
  * Represents n-dimensional drag force, which reduces force value on each step by given
  * coefficient.
@@ -4328,7 +4388,7 @@ module.exports = function (options) {
   return api;
 };
 
-},{"ngraph.expose":39,"ngraph.merge":53}],31:[function(require,module,exports){
+},{"ngraph.expose":40,"ngraph.merge":54}],32:[function(require,module,exports){
 /**
  * Performs forces integration, using given timestep. Uses Euler method to solve
  * differential equation (http://en.wikipedia.org/wiki/Euler_method ).
@@ -4352,7 +4412,7 @@ function integrate(bodies, timeStep) {
   return totalMove/bodies.length;
 }
 
-},{}],32:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 /**
  * This is Barnes Hut simulation algorithm, generalized for n-dimensional case.
  *
@@ -4568,7 +4628,7 @@ module.exports = function(options) {
   };
 };
 
-},{"../vector.js":38,"./insertStack.js":33,"./isSamePosition.js":34,"./nodeFactory.js":36,"ngraph.random":54}],33:[function(require,module,exports){
+},{"../vector.js":39,"./insertStack.js":34,"./isSamePosition.js":35,"./nodeFactory.js":37,"ngraph.random":55}],34:[function(require,module,exports){
 module.exports = InsertStack;
 
 /**
@@ -4612,7 +4672,7 @@ function InsertStackElement(node, body) {
     this.body = body; // physical body which needs to be inserted to node
 }
 
-},{}],34:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 module.exports = function isSamePosition(point1, point2) {
   for (var i = 0; i < point1.length; ++i) {
     if (Math.abs(point1[i] - point2[i]) > 1e-8) return false;
@@ -4620,7 +4680,7 @@ module.exports = function isSamePosition(point1, point2) {
   return true;
 };
 
-},{}],35:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 /**
  * Internal data structure to represent 4D tree node
  */
@@ -4656,7 +4716,7 @@ OrthNode.prototype.reset = function () {
   this.right.reset();
 };
 
-},{"../vector.js":38}],36:[function(require,module,exports){
+},{"../vector.js":39}],37:[function(require,module,exports){
 var OrthNode = require('./node.js');
 
 module.exports = createNodeFactory;
@@ -4687,7 +4747,7 @@ function createNodeFactory(dim) {
   }
 }
 
-},{"./node.js":35}],37:[function(require,module,exports){
+},{"./node.js":36}],38:[function(require,module,exports){
 /**
  * Represents n-dimensional spring force, which updates forces acting on two
  * bodies, conntected by a spring.
@@ -4736,7 +4796,7 @@ module.exports = function (options) {
   return api;
 };
 
-},{"./vector.js":38,"ngraph.expose":39,"ngraph.merge":53,"ngraph.random":54}],38:[function(require,module,exports){
+},{"./vector.js":39,"ngraph.expose":40,"ngraph.merge":54,"ngraph.random":55}],39:[function(require,module,exports){
 module.exports = Vector;
 
 function Vector(pos) {
@@ -4872,7 +4932,7 @@ Vector.prototype.assignWeightedDiff = function(a, weight, b) {
   }
 };
 
-},{}],39:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 module.exports = exposeProperties;
 
 /**
@@ -4918,7 +4978,7 @@ function augment(source, target, key) {
   }
 }
 
-},{}],40:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 module.exports = createLayout;
 module.exports.simulator = require('ngraph.physics.simulator');
 
@@ -5222,7 +5282,7 @@ function createLayout(graph, physicsSettings) {
 
 function noop() { }
 
-},{"ngraph.physics.simulator":41}],41:[function(require,module,exports){
+},{"ngraph.physics.simulator":42}],42:[function(require,module,exports){
 /**
  * Manages a simulation of physical forces acting on bodies and springs.
  */
@@ -5478,7 +5538,7 @@ function physicsSimulator(settings) {
   }
 };
 
-},{"./lib/bounds":42,"./lib/createBody":43,"./lib/dragForce":44,"./lib/eulerIntegrator":45,"./lib/spring":46,"./lib/springForce":47,"ngraph.expose":39,"ngraph.merge":53,"ngraph.quadtreebh":49}],42:[function(require,module,exports){
+},{"./lib/bounds":43,"./lib/createBody":44,"./lib/dragForce":45,"./lib/eulerIntegrator":46,"./lib/spring":47,"./lib/springForce":48,"ngraph.expose":40,"ngraph.merge":54,"ngraph.quadtreebh":50}],43:[function(require,module,exports){
 module.exports = function (bodies, settings) {
   var random = require('ngraph.random').random(42);
   var boundingBox =  { x1: 0, y1: 0, x2: 0, y2: 0 };
@@ -5560,14 +5620,14 @@ module.exports = function (bodies, settings) {
   }
 }
 
-},{"ngraph.random":54}],43:[function(require,module,exports){
+},{"ngraph.random":55}],44:[function(require,module,exports){
 var physics = require('ngraph.physics.primitives');
 
 module.exports = function(pos) {
   return new physics.Body(pos);
 }
 
-},{"ngraph.physics.primitives":48}],44:[function(require,module,exports){
+},{"ngraph.physics.primitives":49}],45:[function(require,module,exports){
 /**
  * Represents drag force, which reduces force value on each step by given
  * coefficient.
@@ -5596,7 +5656,7 @@ module.exports = function (options) {
   return api;
 };
 
-},{"ngraph.expose":39,"ngraph.merge":53}],45:[function(require,module,exports){
+},{"ngraph.expose":40,"ngraph.merge":54}],46:[function(require,module,exports){
 /**
  * Performs forces integration, using given timestep. Uses Euler method to solve
  * differential equation (http://en.wikipedia.org/wiki/Euler_method ).
@@ -5639,7 +5699,7 @@ function integrate(bodies, timeStep) {
   return (tx * tx + ty * ty)/bodies.length;
 }
 
-},{}],46:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 module.exports = Spring;
 
 /**
@@ -5655,7 +5715,7 @@ function Spring(fromBody, toBody, length, coeff, weight) {
     this.weight = typeof weight === 'number' ? weight : 1;
 };
 
-},{}],47:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 /**
  * Represents spring force, which updates forces acting on two bodies, conntected
  * by a spring.
@@ -5707,7 +5767,7 @@ module.exports = function (options) {
   return api;
 }
 
-},{"ngraph.expose":39,"ngraph.merge":53,"ngraph.random":54}],48:[function(require,module,exports){
+},{"ngraph.expose":40,"ngraph.merge":54,"ngraph.random":55}],49:[function(require,module,exports){
 module.exports = {
   Body: Body,
   Vector2d: Vector2d,
@@ -5774,7 +5834,7 @@ Vector3d.prototype.reset = function () {
   this.x = this.y = this.z = 0;
 };
 
-},{}],49:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
 /**
  * This is Barnes Hut simulation algorithm for 2d case. Implementation
  * is highly optimized (avoids recusion and gc pressure)
@@ -6100,7 +6160,7 @@ function setChild(node, idx, child) {
   else if (idx === 3) node.quad3 = child;
 }
 
-},{"./insertStack":50,"./isSamePosition":51,"./node":52,"ngraph.random":54}],50:[function(require,module,exports){
+},{"./insertStack":51,"./isSamePosition":52,"./node":53,"ngraph.random":55}],51:[function(require,module,exports){
 module.exports = InsertStack;
 
 /**
@@ -6144,7 +6204,7 @@ function InsertStackElement(node, body) {
     this.body = body; // physical body which needs to be inserted to node
 }
 
-},{}],51:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 module.exports = function isSamePosition(point1, point2) {
     var dx = Math.abs(point1.x - point2.x);
     var dy = Math.abs(point1.y - point2.y);
@@ -6152,7 +6212,7 @@ module.exports = function isSamePosition(point1, point2) {
     return (dx < 1e-8 && dy < 1e-8);
 };
 
-},{}],52:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 /**
  * Internal data structure to represent 2D QuadTree node
  */
@@ -6184,7 +6244,7 @@ module.exports = function Node() {
   this.right = 0;
 };
 
-},{}],53:[function(require,module,exports){
+},{}],54:[function(require,module,exports){
 module.exports = merge;
 
 /**
@@ -6217,7 +6277,7 @@ function merge(target, options) {
   return target;
 }
 
-},{}],54:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 module.exports = {
   random: random,
   randomIterator: randomIterator
@@ -6304,7 +6364,7 @@ function randomIterator(array, customRandom) {
     };
 }
 
-},{}],55:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 module.exports = {
   ladder: ladder,
   complete: complete,
@@ -6605,7 +6665,7 @@ function wattsStrogatz(n, k, p, seed) {
   return g;
 }
 
-},{"ngraph.graph":56,"ngraph.random":58}],56:[function(require,module,exports){
+},{"ngraph.graph":57,"ngraph.random":59}],57:[function(require,module,exports){
 /**
  * @fileOverview Contains definition of the core graph object.
  */
@@ -7159,7 +7219,7 @@ function Link(fromId, toId, data, id) {
   this.id = id;
 }
 
-},{"ngraph.events":57}],57:[function(require,module,exports){
+},{"ngraph.events":58}],58:[function(require,module,exports){
 module.exports = function(subject) {
   validateSubject(subject);
 
@@ -7249,9 +7309,9 @@ function validateSubject(subject) {
   }
 }
 
-},{}],58:[function(require,module,exports){
-arguments[4][54][0].apply(exports,arguments)
-},{"dup":54}],59:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
+arguments[4][55][0].apply(exports,arguments)
+},{"dup":55}],60:[function(require,module,exports){
 module.exports = pixel;
 var THREE = require('three');
 var eventify = require('ngraph.events');
@@ -7350,7 +7410,15 @@ function pixel(graph, options) {
     /**
      * Returns instance of the three.js camera
      */
-    camera: getCamera
+    camera: getCamera,
+
+    /**
+     * Allows clients to set/get current clear color of the scene (the background)
+     *
+     * @param {number+} color if specified, then new color is set. Otherwise
+     * returns current clear color.
+     */
+    clearColor: clearColor
   };
 
   eventify(api);
@@ -7386,6 +7454,13 @@ function pixel(graph, options) {
 
   function getCamera() {
     return camera;
+  }
+
+  function clearColor(newColor) {
+    newColor = normalizeColor(newColor);
+    if (typeof newColor !== 'number') return renderer.getClearColor();
+
+    renderer.setClearColor(newColor);
   }
 
   function run() {
@@ -7596,7 +7671,7 @@ function pixel(graph, options) {
   }
 }
 
-},{"./lib/autoFit.js":60,"./lib/edgeView.js":63,"./lib/flyTo.js":64,"./lib/input.js":66,"./lib/nodeView.js":68,"./lib/tooltip.js":69,"./options.js":103,"ngraph.events":72,"three":102}],60:[function(require,module,exports){
+},{"./lib/autoFit.js":61,"./lib/edgeView.js":64,"./lib/flyTo.js":65,"./lib/input.js":67,"./lib/nodeView.js":69,"./lib/tooltip.js":70,"./options.js":104,"ngraph.events":73,"three":103}],61:[function(require,module,exports){
 var flyTo = require('./flyTo.js');
 module.exports = createAutoFit;
 
@@ -7612,7 +7687,7 @@ function createAutoFit(nodeView, camera) {
   }
 }
 
-},{"./flyTo.js":64}],61:[function(require,module,exports){
+},{"./flyTo.js":65}],62:[function(require,module,exports){
 var THREE = require('three');
 
 
@@ -7656,10 +7731,10 @@ function createParticleMaterial() {
   });
 }
 
-},{"./defaultTexture.js":62,"three":102}],62:[function(require,module,exports){
+},{"./defaultTexture.js":63,"three":103}],63:[function(require,module,exports){
 module.exports = 'data:image/png;base64,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TUw6Y29tLmFkb2JlLnhtcAAAAAAAPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iWE1QIENvcmUgNS40LjAiPgogICA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgogICAgICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIgogICAgICAgICAgICB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOnRpZmY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vdGlmZi8xLjAvIgogICAgICAgICAgICB4bWxuczpleGlmPSJodHRwOi8vbnMuYWRvYmUuY29tL2V4aWYvMS4wLyI+CiAgICAgICAgIDx4bXA6TW9kaWZ5RGF0ZT4yMDE1LTA0LTIxVDEyOjA0OjE0PC94bXA6TW9kaWZ5RGF0ZT4KICAgICAgICAgPHhtcDpDcmVhdG9yVG9vbD5QaXhlbG1hdG9yIDMuMy4xPC94bXA6Q3JlYXRvclRvb2w+CiAgICAgICAgIDx0aWZmOk9yaWVudGF0aW9uPjE8L3RpZmY6T3JpZW50YXRpb24+CiAgICAgICAgIDx0aWZmOkNvbXByZXNzaW9uPjU8L3RpZmY6Q29tcHJlc3Npb24+CiAgICAgICAgIDx0aWZmOlJlc29sdXRpb25Vbml0PjI8L3RpZmY6UmVzb2x1dGlvblVuaXQ+CiAgICAgICAgIDx0aWZmOllSZXNvbHV0aW9uPjcyPC90aWZmOllSZXNvbHV0aW9uPgogICAgICAgICA8dGlmZjpYUmVzb2x1dGlvbj43MjwvdGlmZjpYUmVzb2x1dGlvbj4KICAgICAgICAgPGV4aWY6UGl4ZWxYRGltZW5zaW9uPjY0PC9leGlmOlBpeGVsWERpbWVuc2lvbj4KICAgICAgICAgPGV4aWY6Q29sb3JTcGFjZT4xPC9leGlmOkNvbG9yU3BhY2U+CiAgICAgICAgIDxleGlmOlBpeGVsWURpbWVuc2lvbj42NDwvZXhpZjpQaXhlbFlEaW1lbnNpb24+CiAgICAgIDwvcmRmOkRlc2NyaXB0aW9uPgogICA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgrreGHBAAADdElEQVR4Ae2bP2/TQBjGcSpBBxhBShEZMrAhsTB1Srt1AKkTLAh1KZ1YO/ULIJWv0I2tEgxshAkJlQXBxpAhiEbACEOLRMLvcX2W7ThxFMWJ7Tev9MT/znfv89x7Z8d3513K2QaDwTWK2ARNUAdrEehY1gOnEei4A956nvebbbkM0nWwC96AMzCt6V7lobycWMUUAwdXwTPwAfTBrE15Km+VsVoYFXCmBp6ALpiXqSyVWVuoEDiwBT6DRZnK3pq7CBTaAO1FsU4pV7405iIEBa2DHylOLPqUfFrPVQQK2AHni2Y6pnz5tjNzEch0BRyOKbhol+TryiRCeFmJgoyOSXc/K23Brr/Gn21epP6N82uSx8hzMigbeXGWz/J9eqP21ebLbmP7hJFNANbqUdvg8vQSFuLOv3ixQVN4n+ZNqgCQ1zP1I7iRdlMJz/3E53uI0E36PqoPOCJhVciLs7gcaSdpQwJQ+3q1bCUTVuC4FXCLUYk1ARJIkE/gTixVdQ6+QOUuTaHvKCUj4DEXqkpenMVNHEMLI4Da13/sr+BWeLWaO9+gdZsoOBO9aAQ85bjq5MVZHHe1I4sK8PDilInfR46l3wQIf31v+w7CJuESVHQ7gNdNmkHPRYDem62QV52Kq///xgnwQGeNmc/ZI/z13f4XuGJMgHP4XlcEaNDCGnnVtThvSoCmjoxaUwJoqMqqrUmAYg855Vs19WUEILDpJqDHoIafr+YbaYXN/Y+agF4LrZr/AaRnlT28/f8Cmplh1U7VBJYCWK1+Vb4iwHwf0DEcAZ3l32E+C+lFqG0wCtrirj5A9upiY+rX57z8KKo619dRNieG6v8k4BwbF3hpSICQa/gp3PzQGCGhsbIDA1FwEHD1qYYRoCOiQE8Fu8PjKNNHgH2JUVHbDziG9GIR4M4SCXoxarnjimzfQX4jyWWUAA0S2p0khVJdBNgGmmJWdhMHzRgVpyFTp5dq3KB5dXupF8t1ci/gMp3X9AdlmiSNuzE7zGKd2gdEbyI7zbo+Bv54evRawfdnM1ma8NFsa/UHLwpOOOqefM2cKR69YaJ9osHmgomoOohgd8mMEwIR7C6aciJoixA2l80lRKghhM2FkwkhbC6djYrg9omI0iyeznwRcqSm3SKGpuFpJloTaDKGpuRo68Du0NJ5jVd2QO7L5/8Dc+ARuhyh4sQAAAAASUVORK5CYII='
 
-},{}],63:[function(require,module,exports){
+},{}],64:[function(require,module,exports){
 var THREE = require('three');
 
 module.exports = edgeView;
@@ -7754,7 +7829,7 @@ function edgeView(scene) {
   }
 }
 
-},{"three":102}],64:[function(require,module,exports){
+},{"three":103}],65:[function(require,module,exports){
 /**
  * Moves camera to given point, and stops it and given radius
  */
@@ -7779,7 +7854,7 @@ function flyTo(camera, to, radius) {
   camera.position.z = cameraEndPos.z;
 }
 
-},{"./intersect.js":67,"three":102}],65:[function(require,module,exports){
+},{"./intersect.js":68,"three":103}],66:[function(require,module,exports){
 /**
  * Gives an index of a node under mouse coordinates
  */
@@ -8032,7 +8107,7 @@ function createHitTest(domElement) {
   }
 }
 
-},{"ngraph.events":72,"three":102}],66:[function(require,module,exports){
+},{"ngraph.events":73,"three":103}],67:[function(require,module,exports){
 var FlyControls = require('three.fly');
 var eventify = require('ngraph.events');
 var THREE = require('three');
@@ -8107,7 +8182,7 @@ function createInput(camera, graph, domElement) {
   }
 }
 
-},{"./hitTest.js":65,"ngraph.events":72,"three":102,"three.fly":100}],67:[function(require,module,exports){
+},{"./hitTest.js":66,"ngraph.events":73,"three":103,"three.fly":101}],68:[function(require,module,exports){
 module.exports = intersect;
 
 /**
@@ -8133,7 +8208,7 @@ function intersect(from, to, r) {
   };
 }
 
-},{}],68:[function(require,module,exports){
+},{}],69:[function(require,module,exports){
 var THREE = require('three');
 var particleMaterial = require('./createMaterial.js')();
 
@@ -8242,7 +8317,7 @@ function nodeView(scene) {
   }
 }
 
-},{"./createMaterial.js":61,"three":102}],69:[function(require,module,exports){
+},{"./createMaterial.js":62,"three":103}],70:[function(require,module,exports){
 /**
  * manages view for tooltips shown when user hover over a node
  */
@@ -8287,7 +8362,7 @@ function createTooltipView(container) {
   }
 }
 
-},{"element-class":70,"insert-css":71}],70:[function(require,module,exports){
+},{"element-class":71,"insert-css":72}],71:[function(require,module,exports){
 module.exports = function(opts) {
   return new ElementClass(opts)
 }
@@ -8341,7 +8416,7 @@ ElementClass.prototype.has = function(className) {
   return indexOf(classes, className) > -1
 }
 
-},{}],71:[function(require,module,exports){
+},{}],72:[function(require,module,exports){
 var inserted = {};
 
 module.exports = function (css, options) {
@@ -8365,9 +8440,9 @@ module.exports = function (css, options) {
     }
 };
 
-},{}],72:[function(require,module,exports){
-arguments[4][57][0].apply(exports,arguments)
-},{"dup":57}],73:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
+arguments[4][58][0].apply(exports,arguments)
+},{"dup":58}],74:[function(require,module,exports){
 /**
  * Creates a force based layout that can be switched between 3d and 2d modes
  * Layout is used by ngraph.pixel
@@ -8501,7 +8576,7 @@ function createLayout(graph, options) {
   }
 }
 
-},{"ngraph.events":72,"ngraph.forcelayout3d":74}],74:[function(require,module,exports){
+},{"ngraph.events":73,"ngraph.forcelayout3d":75}],75:[function(require,module,exports){
 /**
  * This module provides all required forces to regular ngraph.physics.simulator
  * to make it 3D simulator. Ideally ngraph.physics.simulator should operate
@@ -8525,7 +8600,7 @@ function createLayout(graph, physicsSettings) {
   return createLayout.get2dLayout(graph, physicsSettings);
 }
 
-},{"./lib/bounds":75,"./lib/createBody":76,"./lib/dragForce":77,"./lib/eulerIntegrator":78,"./lib/springForce":79,"ngraph.forcelayout":81,"ngraph.merge":93,"ngraph.quadtreebh3d":95}],75:[function(require,module,exports){
+},{"./lib/bounds":76,"./lib/createBody":77,"./lib/dragForce":78,"./lib/eulerIntegrator":79,"./lib/springForce":80,"ngraph.forcelayout":82,"ngraph.merge":94,"ngraph.quadtreebh3d":96}],76:[function(require,module,exports){
 module.exports = function (bodies, settings) {
   var random = require('ngraph.random').random(42);
   var boundingBox =  { x1: 0, y1: 0, z1: 0, x2: 0, y2: 0, z2: 0 };
@@ -8624,14 +8699,14 @@ module.exports = function (bodies, settings) {
   }
 };
 
-},{"ngraph.random":99}],76:[function(require,module,exports){
+},{"ngraph.random":100}],77:[function(require,module,exports){
 var physics = require('ngraph.physics.primitives');
 
 module.exports = function(pos) {
   return new physics.Body3d(pos);
 }
 
-},{"ngraph.physics.primitives":94}],77:[function(require,module,exports){
+},{"ngraph.physics.primitives":95}],78:[function(require,module,exports){
 /**
  * Represents 3d drag force, which reduces force value on each step by given
  * coefficient.
@@ -8661,7 +8736,7 @@ module.exports = function (options) {
   return api;
 };
 
-},{"ngraph.expose":80,"ngraph.merge":93}],78:[function(require,module,exports){
+},{"ngraph.expose":81,"ngraph.merge":94}],79:[function(require,module,exports){
 /**
  * Performs 3d forces integration, using given timestep. Uses Euler method to solve
  * differential equation (http://en.wikipedia.org/wiki/Euler_method ).
@@ -8711,7 +8786,7 @@ function integrate(bodies, timeStep) {
   return (tx * tx + ty * ty + tz * tz)/bodies.length;
 }
 
-},{}],79:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 /**
  * Represents 3d spring force, which updates forces acting on two bodies, conntected
  * by a spring.
@@ -8767,37 +8842,37 @@ module.exports = function (options) {
   return api;
 }
 
-},{"ngraph.expose":80,"ngraph.merge":93,"ngraph.random":99}],80:[function(require,module,exports){
-arguments[4][39][0].apply(exports,arguments)
-},{"dup":39}],81:[function(require,module,exports){
+},{"ngraph.expose":81,"ngraph.merge":94,"ngraph.random":100}],81:[function(require,module,exports){
 arguments[4][40][0].apply(exports,arguments)
-},{"dup":40,"ngraph.physics.simulator":82}],82:[function(require,module,exports){
+},{"dup":40}],82:[function(require,module,exports){
 arguments[4][41][0].apply(exports,arguments)
-},{"./lib/bounds":83,"./lib/createBody":84,"./lib/dragForce":85,"./lib/eulerIntegrator":86,"./lib/spring":87,"./lib/springForce":88,"dup":41,"ngraph.expose":80,"ngraph.merge":93,"ngraph.quadtreebh":89}],83:[function(require,module,exports){
+},{"dup":41,"ngraph.physics.simulator":83}],83:[function(require,module,exports){
 arguments[4][42][0].apply(exports,arguments)
-},{"dup":42,"ngraph.random":99}],84:[function(require,module,exports){
+},{"./lib/bounds":84,"./lib/createBody":85,"./lib/dragForce":86,"./lib/eulerIntegrator":87,"./lib/spring":88,"./lib/springForce":89,"dup":42,"ngraph.expose":81,"ngraph.merge":94,"ngraph.quadtreebh":90}],84:[function(require,module,exports){
 arguments[4][43][0].apply(exports,arguments)
-},{"dup":43,"ngraph.physics.primitives":94}],85:[function(require,module,exports){
+},{"dup":43,"ngraph.random":100}],85:[function(require,module,exports){
 arguments[4][44][0].apply(exports,arguments)
-},{"dup":44,"ngraph.expose":80,"ngraph.merge":93}],86:[function(require,module,exports){
+},{"dup":44,"ngraph.physics.primitives":95}],86:[function(require,module,exports){
 arguments[4][45][0].apply(exports,arguments)
-},{"dup":45}],87:[function(require,module,exports){
+},{"dup":45,"ngraph.expose":81,"ngraph.merge":94}],87:[function(require,module,exports){
 arguments[4][46][0].apply(exports,arguments)
 },{"dup":46}],88:[function(require,module,exports){
 arguments[4][47][0].apply(exports,arguments)
-},{"dup":47,"ngraph.expose":80,"ngraph.merge":93,"ngraph.random":99}],89:[function(require,module,exports){
-arguments[4][49][0].apply(exports,arguments)
-},{"./insertStack":90,"./isSamePosition":91,"./node":92,"dup":49,"ngraph.random":99}],90:[function(require,module,exports){
+},{"dup":47}],89:[function(require,module,exports){
+arguments[4][48][0].apply(exports,arguments)
+},{"dup":48,"ngraph.expose":81,"ngraph.merge":94,"ngraph.random":100}],90:[function(require,module,exports){
 arguments[4][50][0].apply(exports,arguments)
-},{"dup":50}],91:[function(require,module,exports){
+},{"./insertStack":91,"./isSamePosition":92,"./node":93,"dup":50,"ngraph.random":100}],91:[function(require,module,exports){
 arguments[4][51][0].apply(exports,arguments)
 },{"dup":51}],92:[function(require,module,exports){
 arguments[4][52][0].apply(exports,arguments)
 },{"dup":52}],93:[function(require,module,exports){
 arguments[4][53][0].apply(exports,arguments)
 },{"dup":53}],94:[function(require,module,exports){
-arguments[4][48][0].apply(exports,arguments)
-},{"dup":48}],95:[function(require,module,exports){
+arguments[4][54][0].apply(exports,arguments)
+},{"dup":54}],95:[function(require,module,exports){
+arguments[4][49][0].apply(exports,arguments)
+},{"dup":49}],96:[function(require,module,exports){
 /**
  * This is Barnes Hut simulation algorithm for 3d case. Implementation
  * is highly optimized (avoids recusion and gc pressure)
@@ -9192,7 +9267,7 @@ function setChild(node, idx, child) {
   else if (idx === 7) node.quad7 = child;
 }
 
-},{"./insertStack":96,"./isSamePosition":97,"./node":98,"ngraph.random":99}],96:[function(require,module,exports){
+},{"./insertStack":97,"./isSamePosition":98,"./node":99,"ngraph.random":100}],97:[function(require,module,exports){
 module.exports = InsertStack;
 
 /**
@@ -9236,7 +9311,7 @@ function InsertStackElement(node, body) {
     this.body = body; // physical body which needs to be inserted to node
 }
 
-},{}],97:[function(require,module,exports){
+},{}],98:[function(require,module,exports){
 module.exports = function isSamePosition(point1, point2) {
     var dx = Math.abs(point1.x - point2.x);
     var dy = Math.abs(point1.y - point2.y);
@@ -9245,7 +9320,7 @@ module.exports = function isSamePosition(point1, point2) {
     return (dx < 1e-8 && dy < 1e-8 && dz < 1e-8);
 };
 
-},{}],98:[function(require,module,exports){
+},{}],99:[function(require,module,exports){
 /**
  * Internal data structure to represent 3D QuadTree node
  */
@@ -9289,9 +9364,9 @@ module.exports = function Node() {
   this.back = 0;
 };
 
-},{}],99:[function(require,module,exports){
-arguments[4][54][0].apply(exports,arguments)
-},{"dup":54}],100:[function(require,module,exports){
+},{}],100:[function(require,module,exports){
+arguments[4][55][0].apply(exports,arguments)
+},{"dup":55}],101:[function(require,module,exports){
 /**
  * @author James Baicoianu / http://www.baicoianu.com/
  * Source: https://github.com/mrdoob/three.js/blob/master/examples/js/controls/FlyControls.js
@@ -9522,7 +9597,7 @@ function fly(camera, domElement, THREE) {
   }
 }
 
-},{"./keymap.js":101,"ngraph.events":72}],101:[function(require,module,exports){
+},{"./keymap.js":102,"ngraph.events":73}],102:[function(require,module,exports){
 /**
  * Defines default key bindings for the controls
  */
@@ -9545,7 +9620,7 @@ function createKeyMap() {
   };
 }
 
-},{}],102:[function(require,module,exports){
+},{}],103:[function(require,module,exports){
 var self = self || {};// File:src/Three.js
 
 /**
@@ -44105,7 +44180,7 @@ if (typeof exports !== 'undefined') {
   this['THREE'] = THREE;
 }
 
-},{}],103:[function(require,module,exports){
+},{}],104:[function(require,module,exports){
 /**
  * This file contains all possible configuration optins for the renderer
  */
@@ -44143,7 +44218,7 @@ function validateOptions(options) {
   return options;
 }
 
-},{"pixel.layout":73}],104:[function(require,module,exports){
+},{"pixel.layout":74}],105:[function(require,module,exports){
 /**
  * # Matrix Market storage
  *
@@ -44304,7 +44379,7 @@ function loadFromObject (mtxObject) {
   return graph;
 }
 
-},{"./mtxParser":105,"ngraph.graph":106}],105:[function(require,module,exports){
+},{"./mtxParser":106,"ngraph.graph":107}],106:[function(require,module,exports){
 /**
  * # MTX Parser
  *
@@ -44413,7 +44488,7 @@ function getLineData(line) {
   return line.replace(trailingWhitespaces, '').split(dataSeparator);
 }
 
-},{"ngraph.graph":106}],106:[function(require,module,exports){
+},{"ngraph.graph":107}],107:[function(require,module,exports){
 /**
  * @fileOverview Contains definition of the core graph object.
  */
@@ -44935,9 +45010,9 @@ function Link(fromId, toId, data, id) {
   this.id = id;
 }
 
-},{"ngraph.events":107}],107:[function(require,module,exports){
-arguments[4][57][0].apply(exports,arguments)
-},{"dup":57}],108:[function(require,module,exports){
+},{"ngraph.events":108}],108:[function(require,module,exports){
+arguments[4][58][0].apply(exports,arguments)
+},{"dup":58}],109:[function(require,module,exports){
 /*!
 	query-string
 	Parse and stringify URL query strings
@@ -45005,68 +45080,23 @@ arguments[4][57][0].apply(exports,arguments)
 	}
 })();
 
-},{}],109:[function(require,module,exports){
+},{}],110:[function(require,module,exports){
 var exdat = require('exdat');
+var createDimensionMapping = require('./lib/dimensionMapping.js');
 module.exports = createSettingsView;
 
-function createSettingsView(layout, dim) {
+function createSettingsView(layout, renderer, dim) {
   var gui = new exdat.GUI();
-  var folder = gui.addFolder('Layout dimensions mapping');
-  var possibleMapping = ['x axis', 'y axis', 'z axis', 'node color', 'none'];
-  var none = possibleMapping[4];
-  var model = {};
-  var controllers = {};
-  for (var i = 0; i < dim; ++i) {
-    if (i < 4) {
-      model[i] = possibleMapping[i];
-    } else {
-      model[i] = none;
-    }
-    controllers[i] = folder.add(model, i, possibleMapping).name(i + ' dimension').onChange(changeMapping);
-  }
-
-  reconfigureLayout(model);
+  createDimensionMapping(gui, layout, dim);
+  var folder = gui.addFolder('View settings');
+  var model = { color: 0x8e8e8e };
+  folder.addColor(model, 'color').name('Background color').onChange(updateClearColor);
   folder.open();
 
-  function changeMapping(newValue) {
-    toggle(newValue, this.property, this.initialValue);
-    this.initialValue = newValue;
-    reconfigureLayout(model);
-    gui.update();
-  }
-
-  function toggle(value, currentProperty, swapWith) {
-    for (var key in model) {
-      if (model.hasOwnProperty(key)) {
-        if (model[key] === value && key != currentProperty) {
-          model[key] = swapWith;
-          controllers[key].initialValue = swapWith;
-        }
-      }
-    }
-  }
-
-  function reconfigureLayout(model) {
-    layout.config(toFlatMap(model));
-  }
-
-  function toFlatMap(model) {
-    var keys = Object.keys(model);
-    var map = {
-      x: get('x axis'),
-      y: get('y axis'),
-      z: get('z axis'),
-      t: get('node color', -1)
-    };
-
-    return map;
-
-    function get(name, defaultValue) {
-      defaultValue = defaultValue !== undefined ? defaultValue : 0;
-      return keys.filter(function(key) {return model[key] === name; })[0] || defaultValue;
-    }
+  function updateClearColor(color) {
+    renderer.clearColor(color);
   }
 }
 
 
-},{"exdat":26}]},{},[1]);
+},{"./lib/dimensionMapping.js":2,"exdat":27}]},{},[1]);
