@@ -1,29 +1,60 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-var query = require('query-string').parse(window.location.search.substring(1));
+var getGraph = require('./lib/getGraph.js');
 var layout4 = require('./lib/pseudo4dlayout.js');
 
-var graph = getGraphFromQueryString(query);
+var query = require('query-string').parse(window.location.search.substring(1));
 var dim = parseInt(query.dim, 10);
 if (isNaN(dim) || dim < 2) {
   dim = 3;
 }
-var renderer = require('ngraph.pixel')(graph, {
-  createLayout: layout4,
-  physics: {
-    dimension: dim
+
+getGraph(query, render);
+
+function render(graph) {
+  var renderer = require('ngraph.pixel')(graph, {
+    createLayout: layout4,
+    clearColor: 0x8e8e8e,
+    physics: {
+      dimension: dim
+    }
+  });
+
+  var layout = renderer.layout();
+
+  renderer.beforeFrame(setColors);
+
+  function setColors() {
+    graph.forEachNode(setSingleNodeColor);
+    graph.forEachLink(setSingleLinkColor);
+
   }
-});
 
-var layout = renderer.layout();
+  function setSingleNodeColor(node) {
+    renderer.nodeColor(node.id, layout.getNodeColor(node.id));
+  }
 
-renderer.beforeFrame(setNodeColors);
-
-function setNodeColors() {
-  graph.forEachNode(setSingleNodeColor);
+  function setSingleLinkColor(link) {
+    var fromColor = layout.getNodeColor(link.fromId);
+    var toColor = layout.getNodeColor(link.toId);
+    renderer.linkColor(link.id, fromColor, toColor);
+  }
 }
 
-function setSingleNodeColor(node) {
-  renderer.nodeColor(node.id, layout.getNodeColor(node.id));
+},{"./lib/getGraph.js":2,"./lib/pseudo4dlayout.js":4,"ngraph.pixel":37,"query-string":86}],2:[function(require,module,exports){
+var http = require('./http.js');
+
+module.exports = getGraph;
+
+function getGraph(query, cb) {
+  if (query.graph) {
+    setTimeout(useGenerrator, 0);
+  } else {
+    getGraphFromUrl(query, cb);
+  }
+
+  function useGenerrator() {
+    cb(getGraphFromQueryString(query));
+  }
 }
 
 function getGraphFromQueryString(query) {
@@ -37,7 +68,36 @@ function getNumber(string, defaultValue) {
   return (typeof number === 'number') && !isNaN(number) ? number : (defaultValue || 10);
 }
 
-},{"./lib/pseudo4dlayout.js":2,"ngraph.generators":31,"ngraph.pixel":35,"query-string":80}],2:[function(require,module,exports){
+function getGraphFromUrl(query, cb) {
+  var urlIsValid = query.url && query.url.match(/^http:\/\/s3.amazonaws.com\/yasiv_uf\/out\//);
+  var url = (urlIsValid && query.url) || 'http://s3.amazonaws.com/yasiv_uf/out/HB/494_bus/index.js';
+
+  http.get(url, function (err, data) {
+    if (err) return;
+    cb(require('ngraph.serialization/mtx').loadFromObject(data));
+  });
+}
+
+},{"./http.js":3,"ngraph.generators":33,"ngraph.serialization/mtx":82}],3:[function(require,module,exports){
+exports.get = function get(url, cb) {
+  var request = new XMLHttpRequest();
+  request.open('GET', url, true);
+
+  request.onload = function() {
+    if (request.status >= 200 && request.status < 400){
+      // Success!
+      var data = JSON.parse(request.responseText);
+      cb(null, data);
+    } else {
+      // We reached our target server, but it returned an error
+      cb(request.status);
+    }
+  };
+
+  request.send();
+};
+
+},{}],4:[function(require,module,exports){
 module.exports = createLayout;
 var layout4d = require('ngraph.forcelayout.nd');
 
@@ -94,7 +154,7 @@ function createLayout(graph, options) {
   }
 }
 
-},{"ngraph.forcelayout.nd":3}],3:[function(require,module,exports){
+},{"ngraph.forcelayout.nd":5}],5:[function(require,module,exports){
 /**
  * N-dimensional force based graph layout
  */
@@ -116,7 +176,7 @@ function createLayout(graph, physicsSettings) {
   return createLayout.get2dLayout(graph, physicsSettings);
 }
 
-},{"./lib/bounds":4,"./lib/createBody":5,"./lib/dragForce":6,"./lib/eulerIntegrator":7,"./lib/orthantTree/index.js":8,"./lib/springForce":13,"ngraph.forcelayout":16,"ngraph.merge":29}],4:[function(require,module,exports){
+},{"./lib/bounds":6,"./lib/createBody":7,"./lib/dragForce":8,"./lib/eulerIntegrator":9,"./lib/orthantTree/index.js":10,"./lib/springForce":15,"ngraph.forcelayout":18,"ngraph.merge":31}],6:[function(require,module,exports){
 var Vector = require('./vector.js');
 
 module.exports = bounds;
@@ -192,7 +252,7 @@ function bounds(bodies, settings) {
   }
 }
 
-},{"./vector.js":14,"ngraph.random":30}],5:[function(require,module,exports){
+},{"./vector.js":16,"ngraph.random":32}],7:[function(require,module,exports){
 var Vector = require('./vector.js');
 
 module.exports = createBody;
@@ -215,7 +275,7 @@ Body.prototype.setPosition = function () {
   }
 };
 
-},{"./vector.js":14}],6:[function(require,module,exports){
+},{"./vector.js":16}],8:[function(require,module,exports){
 /**
  * Represents n-dimensional drag force, which reduces force value on each step by given
  * coefficient.
@@ -243,7 +303,7 @@ module.exports = function (options) {
   return api;
 };
 
-},{"ngraph.expose":15,"ngraph.merge":29}],7:[function(require,module,exports){
+},{"ngraph.expose":17,"ngraph.merge":31}],9:[function(require,module,exports){
 /**
  * Performs forces integration, using given timestep. Uses Euler method to solve
  * differential equation (http://en.wikipedia.org/wiki/Euler_method ).
@@ -267,7 +327,7 @@ function integrate(bodies, timeStep) {
   return totalMove/bodies.length;
 }
 
-},{}],8:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /**
  * This is Barnes Hut simulation algorithm, generalized for n-dimensional case.
  *
@@ -483,7 +543,7 @@ module.exports = function(options) {
   };
 };
 
-},{"../vector.js":14,"./insertStack.js":9,"./isSamePosition.js":10,"./nodeFactory.js":12,"ngraph.random":30}],9:[function(require,module,exports){
+},{"../vector.js":16,"./insertStack.js":11,"./isSamePosition.js":12,"./nodeFactory.js":14,"ngraph.random":32}],11:[function(require,module,exports){
 module.exports = InsertStack;
 
 /**
@@ -527,7 +587,7 @@ function InsertStackElement(node, body) {
     this.body = body; // physical body which needs to be inserted to node
 }
 
-},{}],10:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 module.exports = function isSamePosition(point1, point2) {
   for (var i = 0; i < point1.length; ++i) {
     if (Math.abs(point1[i] - point2[i]) > 1e-8) return false;
@@ -535,7 +595,7 @@ module.exports = function isSamePosition(point1, point2) {
   return true;
 };
 
-},{}],11:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 /**
  * Internal data structure to represent 4D tree node
  */
@@ -571,7 +631,7 @@ OrthNode.prototype.reset = function () {
   this.right.reset();
 };
 
-},{"../vector.js":14}],12:[function(require,module,exports){
+},{"../vector.js":16}],14:[function(require,module,exports){
 var OrthNode = require('./node.js');
 
 module.exports = createNodeFactory;
@@ -602,7 +662,7 @@ function createNodeFactory(dim) {
   }
 }
 
-},{"./node.js":11}],13:[function(require,module,exports){
+},{"./node.js":13}],15:[function(require,module,exports){
 /**
  * Represents n-dimensional spring force, which updates forces acting on two
  * bodies, conntected by a spring.
@@ -651,7 +711,7 @@ module.exports = function (options) {
   return api;
 };
 
-},{"./vector.js":14,"ngraph.expose":15,"ngraph.merge":29,"ngraph.random":30}],14:[function(require,module,exports){
+},{"./vector.js":16,"ngraph.expose":17,"ngraph.merge":31,"ngraph.random":32}],16:[function(require,module,exports){
 module.exports = Vector;
 
 function Vector(pos) {
@@ -787,7 +847,7 @@ Vector.prototype.assignWeightedDiff = function(a, weight, b) {
   }
 };
 
-},{}],15:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 module.exports = exposeProperties;
 
 /**
@@ -833,7 +893,7 @@ function augment(source, target, key) {
   }
 }
 
-},{}],16:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 module.exports = createLayout;
 module.exports.simulator = require('ngraph.physics.simulator');
 
@@ -1137,7 +1197,7 @@ function createLayout(graph, physicsSettings) {
 
 function noop() { }
 
-},{"ngraph.physics.simulator":17}],17:[function(require,module,exports){
+},{"ngraph.physics.simulator":19}],19:[function(require,module,exports){
 /**
  * Manages a simulation of physical forces acting on bodies and springs.
  */
@@ -1393,7 +1453,7 @@ function physicsSimulator(settings) {
   }
 };
 
-},{"./lib/bounds":18,"./lib/createBody":19,"./lib/dragForce":20,"./lib/eulerIntegrator":21,"./lib/spring":22,"./lib/springForce":23,"ngraph.expose":15,"ngraph.merge":29,"ngraph.quadtreebh":25}],18:[function(require,module,exports){
+},{"./lib/bounds":20,"./lib/createBody":21,"./lib/dragForce":22,"./lib/eulerIntegrator":23,"./lib/spring":24,"./lib/springForce":25,"ngraph.expose":17,"ngraph.merge":31,"ngraph.quadtreebh":27}],20:[function(require,module,exports){
 module.exports = function (bodies, settings) {
   var random = require('ngraph.random').random(42);
   var boundingBox =  { x1: 0, y1: 0, x2: 0, y2: 0 };
@@ -1475,14 +1535,14 @@ module.exports = function (bodies, settings) {
   }
 }
 
-},{"ngraph.random":30}],19:[function(require,module,exports){
+},{"ngraph.random":32}],21:[function(require,module,exports){
 var physics = require('ngraph.physics.primitives');
 
 module.exports = function(pos) {
   return new physics.Body(pos);
 }
 
-},{"ngraph.physics.primitives":24}],20:[function(require,module,exports){
+},{"ngraph.physics.primitives":26}],22:[function(require,module,exports){
 /**
  * Represents drag force, which reduces force value on each step by given
  * coefficient.
@@ -1511,7 +1571,7 @@ module.exports = function (options) {
   return api;
 };
 
-},{"ngraph.expose":15,"ngraph.merge":29}],21:[function(require,module,exports){
+},{"ngraph.expose":17,"ngraph.merge":31}],23:[function(require,module,exports){
 /**
  * Performs forces integration, using given timestep. Uses Euler method to solve
  * differential equation (http://en.wikipedia.org/wiki/Euler_method ).
@@ -1554,7 +1614,7 @@ function integrate(bodies, timeStep) {
   return (tx * tx + ty * ty)/bodies.length;
 }
 
-},{}],22:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 module.exports = Spring;
 
 /**
@@ -1570,7 +1630,7 @@ function Spring(fromBody, toBody, length, coeff, weight) {
     this.weight = typeof weight === 'number' ? weight : 1;
 };
 
-},{}],23:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 /**
  * Represents spring force, which updates forces acting on two bodies, conntected
  * by a spring.
@@ -1622,7 +1682,7 @@ module.exports = function (options) {
   return api;
 }
 
-},{"ngraph.expose":15,"ngraph.merge":29,"ngraph.random":30}],24:[function(require,module,exports){
+},{"ngraph.expose":17,"ngraph.merge":31,"ngraph.random":32}],26:[function(require,module,exports){
 module.exports = {
   Body: Body,
   Vector2d: Vector2d,
@@ -1689,7 +1749,7 @@ Vector3d.prototype.reset = function () {
   this.x = this.y = this.z = 0;
 };
 
-},{}],25:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 /**
  * This is Barnes Hut simulation algorithm for 2d case. Implementation
  * is highly optimized (avoids recusion and gc pressure)
@@ -2015,7 +2075,7 @@ function setChild(node, idx, child) {
   else if (idx === 3) node.quad3 = child;
 }
 
-},{"./insertStack":26,"./isSamePosition":27,"./node":28,"ngraph.random":30}],26:[function(require,module,exports){
+},{"./insertStack":28,"./isSamePosition":29,"./node":30,"ngraph.random":32}],28:[function(require,module,exports){
 module.exports = InsertStack;
 
 /**
@@ -2059,7 +2119,7 @@ function InsertStackElement(node, body) {
     this.body = body; // physical body which needs to be inserted to node
 }
 
-},{}],27:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 module.exports = function isSamePosition(point1, point2) {
     var dx = Math.abs(point1.x - point2.x);
     var dy = Math.abs(point1.y - point2.y);
@@ -2067,7 +2127,7 @@ module.exports = function isSamePosition(point1, point2) {
     return (dx < 1e-8 && dy < 1e-8);
 };
 
-},{}],28:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 /**
  * Internal data structure to represent 2D QuadTree node
  */
@@ -2099,7 +2159,7 @@ module.exports = function Node() {
   this.right = 0;
 };
 
-},{}],29:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 module.exports = merge;
 
 /**
@@ -2132,7 +2192,7 @@ function merge(target, options) {
   return target;
 }
 
-},{}],30:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 module.exports = {
   random: random,
   randomIterator: randomIterator
@@ -2219,7 +2279,7 @@ function randomIterator(array, customRandom) {
     };
 }
 
-},{}],31:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 module.exports = {
   ladder: ladder,
   complete: complete,
@@ -2520,7 +2580,7 @@ function wattsStrogatz(n, k, p, seed) {
   return g;
 }
 
-},{"ngraph.graph":32,"ngraph.random":34}],32:[function(require,module,exports){
+},{"ngraph.graph":34,"ngraph.random":36}],34:[function(require,module,exports){
 /**
  * @fileOverview Contains definition of the core graph object.
  */
@@ -3074,7 +3134,7 @@ function Link(fromId, toId, data, id) {
   this.id = id;
 }
 
-},{"ngraph.events":33}],33:[function(require,module,exports){
+},{"ngraph.events":35}],35:[function(require,module,exports){
 module.exports = function(subject) {
   validateSubject(subject);
 
@@ -3164,9 +3224,9 @@ function validateSubject(subject) {
   }
 }
 
-},{}],34:[function(require,module,exports){
-arguments[4][30][0].apply(exports,arguments)
-},{"dup":30}],35:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
+arguments[4][32][0].apply(exports,arguments)
+},{"dup":32}],37:[function(require,module,exports){
 module.exports = pixel;
 var THREE = require('three');
 var eventify = require('ngraph.events');
@@ -3511,7 +3571,7 @@ function pixel(graph, options) {
   }
 }
 
-},{"./lib/autoFit.js":36,"./lib/edgeView.js":39,"./lib/flyTo.js":40,"./lib/input.js":42,"./lib/nodeView.js":44,"./lib/tooltip.js":45,"./options.js":79,"ngraph.events":48,"three":78}],36:[function(require,module,exports){
+},{"./lib/autoFit.js":38,"./lib/edgeView.js":41,"./lib/flyTo.js":42,"./lib/input.js":44,"./lib/nodeView.js":46,"./lib/tooltip.js":47,"./options.js":81,"ngraph.events":50,"three":80}],38:[function(require,module,exports){
 var flyTo = require('./flyTo.js');
 module.exports = createAutoFit;
 
@@ -3527,7 +3587,7 @@ function createAutoFit(nodeView, camera) {
   }
 }
 
-},{"./flyTo.js":40}],37:[function(require,module,exports){
+},{"./flyTo.js":42}],39:[function(require,module,exports){
 var THREE = require('three');
 
 
@@ -3571,12 +3631,12 @@ function createParticleMaterial() {
   });
 }
 
-},{"./defaultTexture.js":38,"three":78}],38:[function(require,module,exports){
+},{"./defaultTexture.js":40,"three":80}],40:[function(require,module,exports){
 //module.exports = 'data:image/png;base64,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';
 
 module.exports = 'data:image/png;base64,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TUw6Y29tLmFkb2JlLnhtcAAAAAAAPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iWE1QIENvcmUgNS40LjAiPgogICA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgogICAgICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIgogICAgICAgICAgICB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOnRpZmY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vdGlmZi8xLjAvIgogICAgICAgICAgICB4bWxuczpleGlmPSJodHRwOi8vbnMuYWRvYmUuY29tL2V4aWYvMS4wLyI+CiAgICAgICAgIDx4bXA6TW9kaWZ5RGF0ZT4yMDE1LTA0LTIxVDEyOjA0OjE0PC94bXA6TW9kaWZ5RGF0ZT4KICAgICAgICAgPHhtcDpDcmVhdG9yVG9vbD5QaXhlbG1hdG9yIDMuMy4xPC94bXA6Q3JlYXRvclRvb2w+CiAgICAgICAgIDx0aWZmOk9yaWVudGF0aW9uPjE8L3RpZmY6T3JpZW50YXRpb24+CiAgICAgICAgIDx0aWZmOkNvbXByZXNzaW9uPjU8L3RpZmY6Q29tcHJlc3Npb24+CiAgICAgICAgIDx0aWZmOlJlc29sdXRpb25Vbml0PjI8L3RpZmY6UmVzb2x1dGlvblVuaXQ+CiAgICAgICAgIDx0aWZmOllSZXNvbHV0aW9uPjcyPC90aWZmOllSZXNvbHV0aW9uPgogICAgICAgICA8dGlmZjpYUmVzb2x1dGlvbj43MjwvdGlmZjpYUmVzb2x1dGlvbj4KICAgICAgICAgPGV4aWY6UGl4ZWxYRGltZW5zaW9uPjY0PC9leGlmOlBpeGVsWERpbWVuc2lvbj4KICAgICAgICAgPGV4aWY6Q29sb3JTcGFjZT4xPC9leGlmOkNvbG9yU3BhY2U+CiAgICAgICAgIDxleGlmOlBpeGVsWURpbWVuc2lvbj42NDwvZXhpZjpQaXhlbFlEaW1lbnNpb24+CiAgICAgIDwvcmRmOkRlc2NyaXB0aW9uPgogICA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgrreGHBAAADdElEQVR4Ae2bP2/TQBjGcSpBBxhBShEZMrAhsTB1Srt1AKkTLAh1KZ1YO/ULIJWv0I2tEgxshAkJlQXBxpAhiEbACEOLRMLvcX2W7ThxFMWJ7Tev9MT/znfv89x7Z8d3513K2QaDwTWK2ARNUAdrEehY1gOnEei4A956nvebbbkM0nWwC96AMzCt6V7lobycWMUUAwdXwTPwAfTBrE15Km+VsVoYFXCmBp6ALpiXqSyVWVuoEDiwBT6DRZnK3pq7CBTaAO1FsU4pV7405iIEBa2DHylOLPqUfFrPVQQK2AHni2Y6pnz5tjNzEch0BRyOKbhol+TryiRCeFmJgoyOSXc/K23Brr/Gn21epP6N82uSx8hzMigbeXGWz/J9eqP21ebLbmP7hJFNANbqUdvg8vQSFuLOv3ixQVN4n+ZNqgCQ1zP1I7iRdlMJz/3E53uI0E36PqoPOCJhVciLs7gcaSdpQwJQ+3q1bCUTVuC4FXCLUYk1ARJIkE/gTixVdQ6+QOUuTaHvKCUj4DEXqkpenMVNHEMLI4Da13/sr+BWeLWaO9+gdZsoOBO9aAQ85bjq5MVZHHe1I4sK8PDilInfR46l3wQIf31v+w7CJuESVHQ7gNdNmkHPRYDem62QV52Kq///xgnwQGeNmc/ZI/z13f4XuGJMgHP4XlcEaNDCGnnVtThvSoCmjoxaUwJoqMqqrUmAYg855Vs19WUEILDpJqDHoIafr+YbaYXN/Y+agF4LrZr/AaRnlT28/f8Cmplh1U7VBJYCWK1+Vb4iwHwf0DEcAZ3l32E+C+lFqG0wCtrirj5A9upiY+rX57z8KKo619dRNieG6v8k4BwbF3hpSICQa/gp3PzQGCGhsbIDA1FwEHD1qYYRoCOiQE8Fu8PjKNNHgH2JUVHbDziG9GIR4M4SCXoxarnjimzfQX4jyWWUAA0S2p0khVJdBNgGmmJWdhMHzRgVpyFTp5dq3KB5dXupF8t1ci/gMp3X9AdlmiSNuzE7zGKd2gdEbyI7zbo+Bv54evRawfdnM1ma8NFsa/UHLwpOOOqefM2cKR69YaJ9osHmgomoOohgd8mMEwIR7C6aciJoixA2l80lRKghhM2FkwkhbC6djYrg9omI0iyeznwRcqSm3SKGpuFpJloTaDKGpuRo68Du0NJ5jVd2QO7L5/8Dc+ARuhyh4sQAAAAASUVORK5CYII='
 
-},{}],39:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 var THREE = require('three');
 
 module.exports = edgeView;
@@ -3671,7 +3731,7 @@ function edgeView(scene) {
   }
 }
 
-},{"three":78}],40:[function(require,module,exports){
+},{"three":80}],42:[function(require,module,exports){
 /**
  * Moves camera to given point, and stops it and given radius
  */
@@ -3696,7 +3756,7 @@ function flyTo(camera, to, radius) {
   camera.position.z = cameraEndPos.z;
 }
 
-},{"./intersect.js":43,"three":78}],41:[function(require,module,exports){
+},{"./intersect.js":45,"three":80}],43:[function(require,module,exports){
 /**
  * Gives an index of a node under mouse coordinates
  */
@@ -3949,7 +4009,7 @@ function createHitTest(domElement) {
   }
 }
 
-},{"ngraph.events":48,"three":78}],42:[function(require,module,exports){
+},{"ngraph.events":50,"three":80}],44:[function(require,module,exports){
 var FlyControls = require('three.fly');
 var eventify = require('ngraph.events');
 var THREE = require('three');
@@ -4024,7 +4084,7 @@ function createInput(camera, graph, domElement) {
   }
 }
 
-},{"./hitTest.js":41,"ngraph.events":48,"three":78,"three.fly":76}],43:[function(require,module,exports){
+},{"./hitTest.js":43,"ngraph.events":50,"three":80,"three.fly":78}],45:[function(require,module,exports){
 module.exports = intersect;
 
 /**
@@ -4050,7 +4110,7 @@ function intersect(from, to, r) {
   };
 }
 
-},{}],44:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 var THREE = require('three');
 var particleMaterial = require('./createMaterial.js')();
 
@@ -4159,7 +4219,7 @@ function nodeView(scene) {
   }
 }
 
-},{"./createMaterial.js":37,"three":78}],45:[function(require,module,exports){
+},{"./createMaterial.js":39,"three":80}],47:[function(require,module,exports){
 /**
  * manages view for tooltips shown when user hover over a node
  */
@@ -4204,7 +4264,7 @@ function createTooltipView(container) {
   }
 }
 
-},{"element-class":46,"insert-css":47}],46:[function(require,module,exports){
+},{"element-class":48,"insert-css":49}],48:[function(require,module,exports){
 module.exports = function(opts) {
   return new ElementClass(opts)
 }
@@ -4258,7 +4318,7 @@ ElementClass.prototype.has = function(className) {
   return indexOf(classes, className) > -1
 }
 
-},{}],47:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
 var inserted = {};
 
 module.exports = function (css, options) {
@@ -4282,9 +4342,9 @@ module.exports = function (css, options) {
     }
 };
 
-},{}],48:[function(require,module,exports){
-arguments[4][33][0].apply(exports,arguments)
-},{"dup":33}],49:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
+arguments[4][35][0].apply(exports,arguments)
+},{"dup":35}],51:[function(require,module,exports){
 /**
  * Creates a force based layout that can be switched between 3d and 2d modes
  * Layout is used by ngraph.pixel
@@ -4418,7 +4478,7 @@ function createLayout(graph, options) {
   }
 }
 
-},{"ngraph.events":48,"ngraph.forcelayout3d":50}],50:[function(require,module,exports){
+},{"ngraph.events":50,"ngraph.forcelayout3d":52}],52:[function(require,module,exports){
 /**
  * This module provides all required forces to regular ngraph.physics.simulator
  * to make it 3D simulator. Ideally ngraph.physics.simulator should operate
@@ -4442,7 +4502,7 @@ function createLayout(graph, physicsSettings) {
   return createLayout.get2dLayout(graph, physicsSettings);
 }
 
-},{"./lib/bounds":51,"./lib/createBody":52,"./lib/dragForce":53,"./lib/eulerIntegrator":54,"./lib/springForce":55,"ngraph.forcelayout":57,"ngraph.merge":69,"ngraph.quadtreebh3d":71}],51:[function(require,module,exports){
+},{"./lib/bounds":53,"./lib/createBody":54,"./lib/dragForce":55,"./lib/eulerIntegrator":56,"./lib/springForce":57,"ngraph.forcelayout":59,"ngraph.merge":71,"ngraph.quadtreebh3d":73}],53:[function(require,module,exports){
 module.exports = function (bodies, settings) {
   var random = require('ngraph.random').random(42);
   var boundingBox =  { x1: 0, y1: 0, z1: 0, x2: 0, y2: 0, z2: 0 };
@@ -4541,14 +4601,14 @@ module.exports = function (bodies, settings) {
   }
 };
 
-},{"ngraph.random":75}],52:[function(require,module,exports){
+},{"ngraph.random":77}],54:[function(require,module,exports){
 var physics = require('ngraph.physics.primitives');
 
 module.exports = function(pos) {
   return new physics.Body3d(pos);
 }
 
-},{"ngraph.physics.primitives":70}],53:[function(require,module,exports){
+},{"ngraph.physics.primitives":72}],55:[function(require,module,exports){
 /**
  * Represents 3d drag force, which reduces force value on each step by given
  * coefficient.
@@ -4578,7 +4638,7 @@ module.exports = function (options) {
   return api;
 };
 
-},{"ngraph.expose":56,"ngraph.merge":69}],54:[function(require,module,exports){
+},{"ngraph.expose":58,"ngraph.merge":71}],56:[function(require,module,exports){
 /**
  * Performs 3d forces integration, using given timestep. Uses Euler method to solve
  * differential equation (http://en.wikipedia.org/wiki/Euler_method ).
@@ -4628,7 +4688,7 @@ function integrate(bodies, timeStep) {
   return (tx * tx + ty * ty + tz * tz)/bodies.length;
 }
 
-},{}],55:[function(require,module,exports){
+},{}],57:[function(require,module,exports){
 /**
  * Represents 3d spring force, which updates forces acting on two bodies, conntected
  * by a spring.
@@ -4684,37 +4744,37 @@ module.exports = function (options) {
   return api;
 }
 
-},{"ngraph.expose":56,"ngraph.merge":69,"ngraph.random":75}],56:[function(require,module,exports){
-arguments[4][15][0].apply(exports,arguments)
-},{"dup":15}],57:[function(require,module,exports){
-arguments[4][16][0].apply(exports,arguments)
-},{"dup":16,"ngraph.physics.simulator":58}],58:[function(require,module,exports){
+},{"ngraph.expose":58,"ngraph.merge":71,"ngraph.random":77}],58:[function(require,module,exports){
 arguments[4][17][0].apply(exports,arguments)
-},{"./lib/bounds":59,"./lib/createBody":60,"./lib/dragForce":61,"./lib/eulerIntegrator":62,"./lib/spring":63,"./lib/springForce":64,"dup":17,"ngraph.expose":56,"ngraph.merge":69,"ngraph.quadtreebh":65}],59:[function(require,module,exports){
+},{"dup":17}],59:[function(require,module,exports){
 arguments[4][18][0].apply(exports,arguments)
-},{"dup":18,"ngraph.random":75}],60:[function(require,module,exports){
+},{"dup":18,"ngraph.physics.simulator":60}],60:[function(require,module,exports){
 arguments[4][19][0].apply(exports,arguments)
-},{"dup":19,"ngraph.physics.primitives":70}],61:[function(require,module,exports){
+},{"./lib/bounds":61,"./lib/createBody":62,"./lib/dragForce":63,"./lib/eulerIntegrator":64,"./lib/spring":65,"./lib/springForce":66,"dup":19,"ngraph.expose":58,"ngraph.merge":71,"ngraph.quadtreebh":67}],61:[function(require,module,exports){
 arguments[4][20][0].apply(exports,arguments)
-},{"dup":20,"ngraph.expose":56,"ngraph.merge":69}],62:[function(require,module,exports){
+},{"dup":20,"ngraph.random":77}],62:[function(require,module,exports){
 arguments[4][21][0].apply(exports,arguments)
-},{"dup":21}],63:[function(require,module,exports){
+},{"dup":21,"ngraph.physics.primitives":72}],63:[function(require,module,exports){
 arguments[4][22][0].apply(exports,arguments)
-},{"dup":22}],64:[function(require,module,exports){
+},{"dup":22,"ngraph.expose":58,"ngraph.merge":71}],64:[function(require,module,exports){
 arguments[4][23][0].apply(exports,arguments)
-},{"dup":23,"ngraph.expose":56,"ngraph.merge":69,"ngraph.random":75}],65:[function(require,module,exports){
+},{"dup":23}],65:[function(require,module,exports){
+arguments[4][24][0].apply(exports,arguments)
+},{"dup":24}],66:[function(require,module,exports){
 arguments[4][25][0].apply(exports,arguments)
-},{"./insertStack":66,"./isSamePosition":67,"./node":68,"dup":25,"ngraph.random":75}],66:[function(require,module,exports){
-arguments[4][26][0].apply(exports,arguments)
-},{"dup":26}],67:[function(require,module,exports){
+},{"dup":25,"ngraph.expose":58,"ngraph.merge":71,"ngraph.random":77}],67:[function(require,module,exports){
 arguments[4][27][0].apply(exports,arguments)
-},{"dup":27}],68:[function(require,module,exports){
+},{"./insertStack":68,"./isSamePosition":69,"./node":70,"dup":27,"ngraph.random":77}],68:[function(require,module,exports){
 arguments[4][28][0].apply(exports,arguments)
 },{"dup":28}],69:[function(require,module,exports){
 arguments[4][29][0].apply(exports,arguments)
 },{"dup":29}],70:[function(require,module,exports){
-arguments[4][24][0].apply(exports,arguments)
-},{"dup":24}],71:[function(require,module,exports){
+arguments[4][30][0].apply(exports,arguments)
+},{"dup":30}],71:[function(require,module,exports){
+arguments[4][31][0].apply(exports,arguments)
+},{"dup":31}],72:[function(require,module,exports){
+arguments[4][26][0].apply(exports,arguments)
+},{"dup":26}],73:[function(require,module,exports){
 /**
  * This is Barnes Hut simulation algorithm for 3d case. Implementation
  * is highly optimized (avoids recusion and gc pressure)
@@ -5109,7 +5169,7 @@ function setChild(node, idx, child) {
   else if (idx === 7) node.quad7 = child;
 }
 
-},{"./insertStack":72,"./isSamePosition":73,"./node":74,"ngraph.random":75}],72:[function(require,module,exports){
+},{"./insertStack":74,"./isSamePosition":75,"./node":76,"ngraph.random":77}],74:[function(require,module,exports){
 module.exports = InsertStack;
 
 /**
@@ -5153,7 +5213,7 @@ function InsertStackElement(node, body) {
     this.body = body; // physical body which needs to be inserted to node
 }
 
-},{}],73:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 module.exports = function isSamePosition(point1, point2) {
     var dx = Math.abs(point1.x - point2.x);
     var dy = Math.abs(point1.y - point2.y);
@@ -5162,7 +5222,7 @@ module.exports = function isSamePosition(point1, point2) {
     return (dx < 1e-8 && dy < 1e-8 && dz < 1e-8);
 };
 
-},{}],74:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 /**
  * Internal data structure to represent 3D QuadTree node
  */
@@ -5206,9 +5266,9 @@ module.exports = function Node() {
   this.back = 0;
 };
 
-},{}],75:[function(require,module,exports){
-arguments[4][30][0].apply(exports,arguments)
-},{"dup":30}],76:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
+arguments[4][32][0].apply(exports,arguments)
+},{"dup":32}],78:[function(require,module,exports){
 /**
  * @author James Baicoianu / http://www.baicoianu.com/
  * Source: https://github.com/mrdoob/three.js/blob/master/examples/js/controls/FlyControls.js
@@ -5439,7 +5499,7 @@ function fly(camera, domElement, THREE) {
   }
 }
 
-},{"./keymap.js":77,"ngraph.events":48}],77:[function(require,module,exports){
+},{"./keymap.js":79,"ngraph.events":50}],79:[function(require,module,exports){
 /**
  * Defines default key bindings for the controls
  */
@@ -5462,7 +5522,7 @@ function createKeyMap() {
   };
 }
 
-},{}],78:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 var self = self || {};// File:src/Three.js
 
 /**
@@ -40022,7 +40082,7 @@ if (typeof exports !== 'undefined') {
   this['THREE'] = THREE;
 }
 
-},{}],79:[function(require,module,exports){
+},{}],81:[function(require,module,exports){
 /**
  * This file contains all possible configuration optins for the renderer
  */
@@ -40060,7 +40120,801 @@ function validateOptions(options) {
   return options;
 }
 
-},{"pixel.layout":49}],80:[function(require,module,exports){
+},{"pixel.layout":51}],82:[function(require,module,exports){
+/**
+ * # Matrix Market storage
+ *
+ * [Matrix market format](http://math.nist.gov/MatrixMarket/formats.html) is a
+ * format suitable for representing general sparse matrices. Only nonzero entries
+ * are provided, and the coordinates of each nonzero entry is given explicitly.
+ *
+ * Most notably this format is used to store [University of Florida Sparse Matrix
+ * Collection](http://www.cise.ufl.edu/research/sparse/matrices/index.html)
+ */
+
+module.exports = {
+  load: load,
+  createLineParser: createLineParser,
+  saveToObject: saveToObject,
+  loadFromObject: loadFromObject
+};
+
+
+/**
+ * If you have *.mtx file loaded in memory, pass it to this function to parse
+ * it into graph object;
+ *
+ * Example:
+ * ```
+ *   fs.readFile(filename, 'ascii', function(err, mtxFileContent) {
+ *    if (err) throw err;
+ *
+ *    var mtx = require('ngraph.serialization/mtx');
+ *    var graph = mtx.load(mtxFileContent);
+ *    // Now you have graph object.
+ *  });
+ * ```
+ */
+function load (mtxText) {
+  // This is not very efficient, but hey, let me know if you are using this
+  // I'll make it better.
+  var mtxLines = mtxText.split('\n'),
+      mtxParser = createLineParser();
+
+  mtxLines.forEach(function (line) {
+    mtxParser.parse(line);
+  });
+
+  var graph = mtxParser.getGraph();
+  graph.description = mtxParser.getDescription();
+
+  return graph;
+}
+
+/**
+ * If you want streaming parsing, you can create MTX line parser, and
+ * feed MTX file line by line. Call parser.getGraph() at the end to get actual graph
+ *
+ * Example:
+ *
+ * ```
+ *  // We use `lazy` (https://github.com/pkrumins/node-lazy) module to read file
+ *  // line by line:
+ *  var mtxParser = require('ngraph.serialization/mtx').createLineParser(),
+ *      mtxFileStream = fs.createReadStream(mtxFileName)
+ *          .on('end', function () {
+ *            // Your graph is ready:
+ *            var graph = mtxParser.getGraph();
+ *          }),
+ *      lazy = require('lazy');
+ *  lazy(mtxFileStream).lines.forEach(function (line) {
+ *    mtxParser.parse(line.toString());
+ *  });
+ * ```
+ */
+function createLineParser() {
+  var createMtxParser = require('./mtxParser');
+  return createMtxParser();
+}
+
+/**
+ * This function saves graph into object with the following fields:
+ *  `edges` - array of edges written in a row.
+ *  `dimension` - number of elements in `edges` array per edge
+ *
+ * Each edge record in the array includes `from` and `to` ids (which are numbers)
+ * If `includeData` is truthy then each record will also include data associated
+ * with link
+ */
+function saveToObject (graph, includeData) {
+  if (!graph) {
+    throw new Error('Graph is required to saveArray method');
+  }
+  includeData = (includeData === undefined) || !!includeData;
+  var links = [],
+      savedObject = {
+        recordsPerEdge: includeData ? 3 : 2,
+        links: links
+      },
+      canChangeIncludeData = true;
+
+  graph.forEachLink(function (link) {
+    if (typeof link.fromId !== 'number' || typeof link.toId !== 'number') {
+      throw new Error('saveToObject can only work with numbers as node ids.');
+    }
+    links.push(link.fromId);
+    links.push(link.toId);
+    if (includeData) {
+      if (typeof link.data !== 'number') {
+        if (canChangeIncludeData) {
+          includeData = false;
+          // we actually don't have any data associated with links.
+          // change our mind:
+          savedObject.recordsPerEdge = 2;
+          return;
+        } else {
+          throw new Error('Some links are missing data');
+        }
+      }
+      // we can only change includeData once:
+      canChangeIncludeData = false;
+      links.push(link.data);
+    }
+  });
+
+  return savedObject;
+}
+
+/**
+ * This function creates a graph structure from mtx object. An mtx object
+ * is a return value from saveToObject() method, described above.
+ *
+ * @returns {ngraph.graph}
+ */
+function loadFromObject (mtxObject) {
+  var mtxObjectIsValid = mtxObject && typeof mtxObject.recordsPerEdge === 'number'
+                         && mtxObject.links !== undefined;
+  if (!mtxObjectIsValid) {
+    throw new Error('Unexpected mtxObject passed to loadFromObject() method');
+  }
+  var recordsPerEdge = mtxObject.recordsPerEdge,
+      links = mtxObject.links;
+
+  if (links.length % recordsPerEdge !== 0) {
+    throw new Error('Number of edges is not valid for this object');
+  }
+
+  var createGraph = require('ngraph.graph'),
+      graph = createGraph(),
+      from, to, data;
+
+  for (var i = 0; i < links.length; i += recordsPerEdge) {
+    from = links[i];
+    to = links[i + 1];
+    if (recordsPerEdge === 3) {
+      data = links[i + 2];
+    }
+    graph.addLink(from, to , data);
+  }
+  graph.description = mtxObject.description;
+
+  return graph;
+}
+
+},{"./mtxParser":83,"ngraph.graph":84}],83:[function(require,module,exports){
+/**
+ * # MTX Parser
+ *
+ * This is very naive implementation of [Matrix Market format](http://math.nist.gov/MatrixMarket/formats.html)
+ * parser;
+ *
+ * _NOTE_: Current implementation intentionally treats loops as node associated data.
+ *
+ * Example of Matrix market format:
+ *
+ * ```
+ * %%MatrixMarket matrix coordinate real general
+ * %=================================================================================
+ * %
+ * % This ASCII file represents a sparse MxN matrix with L
+ * % nonzeros in the following Matrix Market format:
+ * %
+ * % +----------------------------------------------+
+ * % |%%MatrixMarket matrix coordinate real general | <--- header line
+ * % |%                                             | <--+
+ * % |% comments                                    |    |-- 0 or more comment lines
+ * % |%                                             | <--+
+ * % |    M  N  L                                   | <--- rows, columns, entries
+ * % |    I1  J1  A(I1, J1)                         | <--+
+ * % |    I2  J2  A(I2, J2)                         |    |
+ * % |    I3  J3  A(I3, J3)                         |    |-- L lines
+ * % |        . . .                                 |    |
+ * % |    IL JL  A(IL, JL)                          | <--+
+ * % +----------------------------------------------+
+ * %
+ * % Indices are 1-based, i.e. A(1,1) is the first element.
+ * %
+ * %=================================================================================
+ *   5  5  8
+ *     1     1   1.000e+00
+ *     2     2   1.050e+01
+ *     3     3   1.500e-02
+ *     1     4   6.000e+00
+ *     4     2   2.505e+02
+ *     4     4  -2.800e+02
+ *     4     5   3.332e+01
+ *     5     5   1.200e+01
+ * ```
+ */
+module.exports = mtxParser;
+
+var createGraph = require('ngraph.graph'),
+    dataSeparator = /\s+/,
+// Parser has only two states:
+    WAIT_ROW_COLUMNS_ENTRIES = 0,
+    READ_DATA = 1;
+
+function mtxParser() {
+  var graph = createGraph(),
+      description = [],
+      stats = { rows: 0, columns: 0, nonZero: 0 },
+      state = WAIT_ROW_COLUMNS_ENTRIES;
+
+  return {
+    getGraph: function () {
+      return graph;
+    },
+    getDescription: function () {
+      return description && description.join('\n');
+    },
+    parse: parse
+  };
+
+  function parse(line) {
+    if (!line) {
+      return; // forgive empty lines
+    }
+    if (line[0] === '%') {
+      // We are reading description of a file:
+      description.push(line.slice(1));
+      return;
+    }
+    var data = getLineData(line);
+    if (state === READ_DATA) {
+      // Node ids represent columns and rows, thus they are always integers:
+      var from = parseInt(data[0], 10),
+          to = parseInt(data[1], 10),
+          value = data[2] !== undefined ? parseFloat(data[2]) : undefined;
+
+      // Currently we do not support loops. Treat this as simple node
+      if (from === to) {
+        graph.addNode(from, value);
+      } else {
+        graph.addLink(from, to, value);
+      }
+    } else if (state === WAIT_ROW_COLUMNS_ENTRIES) {
+      // Now we know how many rows/columns we should expect
+      stats.rows = parseInt(data[0], 10);
+      stats.columns = parseInt(data[1], 10);
+      stats.nonZero = parseInt(data[2], 10);
+
+      // From now on we should wait only data
+      state = READ_DATA;
+    }
+  }
+}
+
+var trailingWhitespaces = /^\s+|\s+$/;
+
+function getLineData(line) {
+  return line.replace(trailingWhitespaces, '').split(dataSeparator);
+}
+
+},{"ngraph.graph":84}],84:[function(require,module,exports){
+/**
+ * @fileOverview Contains definition of the core graph object.
+ */
+
+/**
+ * @example
+ *  var graph = require('ngraph.graph')();
+ *  graph.addNode(1);     // graph has one node.
+ *  graph.addLink(2, 3);  // now graph contains three nodes and one link.
+ *
+ */
+module.exports = createGraph;
+
+var eventify = require('ngraph.events');
+
+function createGraph() {
+  // Graph structure is maintained as dictionary of nodes
+  // and array of links. Each node has 'links' property which
+  // hold all links related to that node. And general links
+  // array is used to speed up all links enumeration. This is inefficient
+  // in terms of memory, but simplifies coding.
+
+  var nodes = typeof Object.create === 'function' ? Object.create(null) : {},
+    links = [],
+    // Hash of multi-edges. Used to track ids of edges between same nodes
+    multiEdges = {},
+    nodesCount = 0,
+    suspendEvents = 0,
+
+    forEachNode = createNodeIterator(),
+    linkConnectionSymbol = '👉 ',
+
+    // Our graph API provides means to listen to graph changes. Users can subscribe
+    // to be notified about changes in the graph by using `on` method. However
+    // in some cases they don't use it. To avoid unnecessary memory consumption
+    // we will not record graph changes until we have at least one subscriber.
+    // Code below supports this optimization.
+    //
+    // Accumulates all changes made during graph updates.
+    // Each change element contains:
+    //  changeType - one of the strings: 'add', 'remove' or 'update';
+    //  node - if change is related to node this property is set to changed graph's node;
+    //  link - if change is related to link this property is set to changed graph's link;
+    changes = [],
+    recordLinkChange = noop,
+    recordNodeChange = noop,
+    enterModification = noop,
+    exitModification = noop;
+
+  // this is our public API:
+  var graphPart = {
+    /**
+     * Adds node to the graph. If node with given id already exists in the graph
+     * its data is extended with whatever comes in 'data' argument.
+     *
+     * @param nodeId the node's identifier. A string or number is preferred.
+     *   note: Node id should not contain 'linkConnectionSymbol'. This will break link identifiers
+     * @param [data] additional data for the node being added. If node already
+     *   exists its data object is augmented with the new one.
+     *
+     * @return {node} The newly added node or node with given id if it already exists.
+     */
+    addNode: addNode,
+
+    /**
+     * Adds a link to the graph. The function always create a new
+     * link between two nodes. If one of the nodes does not exists
+     * a new node is created.
+     *
+     * @param fromId link start node id;
+     * @param toId link end node id;
+     * @param [data] additional data to be set on the new link;
+     *
+     * @return {link} The newly created link
+     */
+    addLink: addLink,
+
+    /**
+     * Removes link from the graph. If link does not exist does nothing.
+     *
+     * @param link - object returned by addLink() or getLinks() methods.
+     *
+     * @returns true if link was removed; false otherwise.
+     */
+    removeLink: removeLink,
+
+    /**
+     * Removes node with given id from the graph. If node does not exist in the graph
+     * does nothing.
+     *
+     * @param nodeId node's identifier passed to addNode() function.
+     *
+     * @returns true if node was removed; false otherwise.
+     */
+    removeNode: removeNode,
+
+    /**
+     * Gets node with given identifier. If node does not exist undefined value is returned.
+     *
+     * @param nodeId requested node identifier;
+     *
+     * @return {node} in with requested identifier or undefined if no such node exists.
+     */
+    getNode: getNode,
+
+    /**
+     * Gets number of nodes in this graph.
+     *
+     * @return number of nodes in the graph.
+     */
+    getNodesCount: function() {
+      return nodesCount;
+    },
+
+    /**
+     * Gets total number of links in the graph.
+     */
+    getLinksCount: function() {
+      return links.length;
+    },
+
+    /**
+     * Gets all links (inbound and outbound) from the node with given id.
+     * If node with given id is not found null is returned.
+     *
+     * @param nodeId requested node identifier.
+     *
+     * @return Array of links from and to requested node if such node exists;
+     *   otherwise null is returned.
+     */
+    getLinks: getLinks,
+
+    /**
+     * Invokes callback on each node of the graph.
+     *
+     * @param {Function(node)} callback Function to be invoked. The function
+     *   is passed one argument: visited node.
+     */
+    forEachNode: forEachNode,
+
+    /**
+     * Invokes callback on every linked (adjacent) node to the given one.
+     *
+     * @param nodeId Identifier of the requested node.
+     * @param {Function(node, link)} callback Function to be called on all linked nodes.
+     *   The function is passed two parameters: adjacent node and link object itself.
+     * @param oriented if true graph treated as oriented.
+     */
+    forEachLinkedNode: forEachLinkedNode,
+
+    /**
+     * Enumerates all links in the graph
+     *
+     * @param {Function(link)} callback Function to be called on all links in the graph.
+     *   The function is passed one parameter: graph's link object.
+     *
+     * Link object contains at least the following fields:
+     *  fromId - node id where link starts;
+     *  toId - node id where link ends,
+     *  data - additional data passed to graph.addLink() method.
+     */
+    forEachLink: forEachLink,
+
+    /**
+     * Suspend all notifications about graph changes until
+     * endUpdate is called.
+     */
+    beginUpdate: enterModification,
+
+    /**
+     * Resumes all notifications about graph changes and fires
+     * graph 'changed' event in case there are any pending changes.
+     */
+    endUpdate: exitModification,
+
+    /**
+     * Removes all nodes and links from the graph.
+     */
+    clear: clear,
+
+    /**
+     * Detects whether there is a link between two nodes.
+     * Operation complexity is O(n) where n - number of links of a node.
+     * NOTE: this function is synonim for getLink()
+     *
+     * @returns link if there is one. null otherwise.
+     */
+    hasLink: getLink,
+
+    /**
+     * Gets an edge between two nodes.
+     * Operation complexity is O(n) where n - number of links of a node.
+     *
+     * @param {string} fromId link start identifier
+     * @param {string} toId link end identifier
+     *
+     * @returns link if there is one. null otherwise.
+     */
+    getLink: getLink
+  };
+
+  // this will add `on()` and `fire()` methods.
+  eventify(graphPart);
+
+  monitorSubscribers();
+
+  return graphPart;
+
+  function monitorSubscribers() {
+    var realOn = graphPart.on;
+
+    // replace real `on` with our temporary on, which will trigger change
+    // modification monitoring:
+    graphPart.on = on;
+
+    function on() {
+      // now it's time to start tracking stuff:
+      enterModification = enterModificationReal;
+      exitModification = exitModificationReal;
+      recordLinkChange = recordLinkChangeReal;
+      recordNodeChange = recordNodeChangeReal;
+
+      // this will replace current `on` method with real pub/sub from `eventify`.
+      graphPart.on = realOn;
+      // delegate to real `on` handler:
+      return realOn.apply(graphPart, arguments);
+    }
+  }
+
+  function recordLinkChangeReal(link, changeType) {
+    changes.push({
+      link: link,
+      changeType: changeType
+    });
+  }
+
+  function recordNodeChangeReal(node, changeType) {
+    changes.push({
+      node: node,
+      changeType: changeType
+    });
+  }
+
+  function addNode(nodeId, data) {
+    if (nodeId === undefined) {
+      throw new Error('Invalid node identifier');
+    }
+
+    enterModification();
+
+    var node = getNode(nodeId);
+    if (!node) {
+      // TODO: Should I check for linkConnectionSymbol here?
+      node = new Node(nodeId);
+      nodesCount++;
+      recordNodeChange(node, 'add');
+    } else {
+      recordNodeChange(node, 'update');
+    }
+
+    node.data = data;
+
+    nodes[nodeId] = node;
+
+    exitModification();
+    return node;
+  }
+
+  function getNode(nodeId) {
+    return nodes[nodeId];
+  }
+
+  function removeNode(nodeId) {
+    var node = getNode(nodeId);
+    if (!node) {
+      return false;
+    }
+
+    enterModification();
+
+    while (node.links.length) {
+      var link = node.links[0];
+      removeLink(link);
+    }
+
+    delete nodes[nodeId];
+    nodesCount--;
+
+    recordNodeChange(node, 'remove');
+
+    exitModification();
+
+    return true;
+  }
+
+
+  function addLink(fromId, toId, data) {
+    enterModification();
+
+    var fromNode = getNode(fromId) || addNode(fromId);
+    var toNode = getNode(toId) || addNode(toId);
+
+    var linkId = fromId.toString() + linkConnectionSymbol + toId.toString();
+    var isMultiEdge = multiEdges.hasOwnProperty(linkId);
+    if (isMultiEdge || getLink(fromId, toId)) {
+      if (!isMultiEdge) {
+        multiEdges[linkId] = 0;
+      }
+      linkId += '@' + (++multiEdges[linkId]);
+    }
+
+    var link = new Link(fromId, toId, data, linkId);
+
+    links.push(link);
+
+    // TODO: this is not cool. On large graphs potentially would consume more memory.
+    fromNode.links.push(link);
+    if (fromId !== toId) {
+      // make sure we are not duplicating links for self-loops
+      toNode.links.push(link);
+    }
+
+    recordLinkChange(link, 'add');
+
+    exitModification();
+
+    return link;
+  }
+
+  function getLinks(nodeId) {
+    var node = getNode(nodeId);
+    return node ? node.links : null;
+  }
+
+  function removeLink(link) {
+    if (!link) {
+      return false;
+    }
+    var idx = indexOfElementInArray(link, links);
+    if (idx < 0) {
+      return false;
+    }
+
+    enterModification();
+
+    links.splice(idx, 1);
+
+    var fromNode = getNode(link.fromId);
+    var toNode = getNode(link.toId);
+
+    if (fromNode) {
+      idx = indexOfElementInArray(link, fromNode.links);
+      if (idx >= 0) {
+        fromNode.links.splice(idx, 1);
+      }
+    }
+
+    if (toNode) {
+      idx = indexOfElementInArray(link, toNode.links);
+      if (idx >= 0) {
+        toNode.links.splice(idx, 1);
+      }
+    }
+
+    recordLinkChange(link, 'remove');
+
+    exitModification();
+
+    return true;
+  }
+
+  function getLink(fromNodeId, toNodeId) {
+    // TODO: Use adjacency matrix to speed up this operation.
+    var node = getNode(fromNodeId),
+      i;
+    if (!node) {
+      return null;
+    }
+
+    for (i = 0; i < node.links.length; ++i) {
+      var link = node.links[i];
+      if (link.fromId === fromNodeId && link.toId === toNodeId) {
+        return link;
+      }
+    }
+
+    return null; // no link.
+  }
+
+  function clear() {
+    enterModification();
+    forEachNode(function(node) {
+      removeNode(node.id);
+    });
+    exitModification();
+  }
+
+  function forEachLink(callback) {
+    var i, length;
+    if (typeof callback === 'function') {
+      for (i = 0, length = links.length; i < length; ++i) {
+        callback(links[i]);
+      }
+    }
+  }
+
+  function forEachLinkedNode(nodeId, callback, oriented) {
+    var node = getNode(nodeId),
+      i,
+      link,
+      linkedNodeId;
+
+    if (node && node.links && typeof callback === 'function') {
+      // Extracted orientation check out of the loop to increase performance
+      if (oriented) {
+        for (i = 0; i < node.links.length; ++i) {
+          link = node.links[i];
+          if (link.fromId === nodeId) {
+            callback(nodes[link.toId], link);
+          }
+        }
+      } else {
+        for (i = 0; i < node.links.length; ++i) {
+          link = node.links[i];
+          linkedNodeId = link.fromId === nodeId ? link.toId : link.fromId;
+
+          callback(nodes[linkedNodeId], link);
+        }
+      }
+    }
+  }
+
+  // we will not fire anything until users of this library explicitly call `on()`
+  // method.
+  function noop() {}
+
+  // Enter, Exit modification allows bulk graph updates without firing events.
+  function enterModificationReal() {
+    suspendEvents += 1;
+  }
+
+  function exitModificationReal() {
+    suspendEvents -= 1;
+    if (suspendEvents === 0 && changes.length > 0) {
+      graphPart.fire('changed', changes);
+      changes.length = 0;
+    }
+  }
+
+  function createNodeIterator() {
+    // Object.keys iterator is 1.3x faster than `for in` loop.
+    // See `https://github.com/anvaka/ngraph.graph/tree/bench-for-in-vs-obj-keys`
+    // branch for perf test
+    return Object.keys ? objectKeysIterator : forInIterator;
+  }
+
+  function objectKeysIterator(callback) {
+    if (typeof callback !== 'function') {
+      return;
+    }
+
+    var keys = Object.keys(nodes);
+    for (var i = 0; i < keys.length; ++i) {
+      if (callback(nodes[keys[i]])) {
+        return; // client doesn't want to proceed. Return.
+      }
+    }
+  }
+
+  function forInIterator(callback) {
+    if (typeof callback !== 'function') {
+      return;
+    }
+    var node;
+
+    for (node in nodes) {
+      if (callback(nodes[node])) {
+        return; // client doesn't want to proceed. Return.
+      }
+    }
+  }
+}
+
+// need this for old browsers. Should this be a separate module?
+function indexOfElementInArray(element, array) {
+  if (array.indexOf) {
+    return array.indexOf(element);
+  }
+
+  var len = array.length,
+    i;
+
+  for (i = 0; i < len; i += 1) {
+    if (array[i] === element) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * Internal structure to represent node;
+ */
+function Node(id) {
+  this.id = id;
+  this.links = [];
+  this.data = null;
+}
+
+
+/**
+ * Internal structure to represent links;
+ */
+function Link(fromId, toId, data, id) {
+  this.fromId = fromId;
+  this.toId = toId;
+  this.data = data;
+  this.id = id;
+}
+
+},{"ngraph.events":85}],85:[function(require,module,exports){
+arguments[4][35][0].apply(exports,arguments)
+},{"dup":35}],86:[function(require,module,exports){
 /*!
 	query-string
 	Parse and stringify URL query strings
