@@ -7,9 +7,9 @@ a node.
 
 # examples
 
-For four-dimensional force based layout is computed for graphs. Then graphs are
-rendered in 3D, the fourth dimension is used as a node color. The smaller the
-numerical value of the fourth coordinate - the darker is the node.
+The graph layout is computed in four-dimensional and five-dimensional spaces. 
+Then I render them in 3D, using fourth dimension as a node color. 
+The smaller the numerical value of the fourth coordinate - the darker is the node.
 
 In the 5-dimensional case, only four coordinates are used.
 
