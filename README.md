@@ -8,7 +8,8 @@ a node.
 # examples
 
 * `HB/bcsstk26` graph [in 4d](https://anvaka.github.io/mugrem/index.html?dim=4&url=//s3.amazonaws.com/yasiv_uf/out/HB/bcsstk26/index.js):
-![4d graph layout](http://i.imgur.com/CBxNtrG.gif)
+
+[![4d graph layout](http://i.imgur.com/CBxNtrG.gif)](https://anvaka.github.io/mugrem/index.html?dim=4&url=//s3.amazonaws.com/yasiv_uf/out/HB/bcsstk26/index.js)
 
 * `HB/bcsstk26` graph [in 5d](https://anvaka.github.io/mugrem/index.html?dim=5&url=//s3.amazonaws.com/yasiv_uf/out/HB/bcsstk26/index.js)
 * `TOKAMAK/utm300` graph [in 4d](https://anvaka.github.io/mugrem/index.html?dim=4&url=//s3.amazonaws.com/yasiv_uf/out/TOKAMAK/utm300/index.js)
