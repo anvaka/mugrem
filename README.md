@@ -1,7 +1,7 @@
 # mugrem
 
 This is just an experiment: I want to embed higher dimensional graphs into
-lower dimension. E.g. layout graph with 4D algorithme, use first three dimensions
+lower dimension. E.g. layout graph with 4D algorithm, use first three dimensions
 to render graph in `(X, Y, Z)` space, and use fourth dimension to set color of
 a node.
 
@@ -11,7 +11,7 @@ For four-dimensional force based layout is computed for graphs. Then graphs are
 rendered in 3D, the fourth dimension is used as a node color. The smaller the
 numerical value of the fourth coordinate - the darker is the node.
 
-In the 5-dimensional case, only four cooridnates are used.
+In the 5-dimensional case, only four coordinates are used.
 
 * `HB/bcsstk26` graph [in 4d](https://anvaka.github.io/mugrem/index.html?dim=4&url=//s3.amazonaws.com/yasiv_uf/out/HB/bcsstk26/index.js):
 
@@ -34,7 +34,7 @@ without affecting node placement. Here is what I found for `HB/bcsstk26`:
 
 ![switch](http://i.imgur.com/DaW4djb.gif)
 
-As you can see, the swith affects different parts of a graph, which means
+As you can see, the switch affects different parts of a graph, which means
 that nodes that are closer to us in the fourth dimension are farther from us
 in the fifth, and vice versa.
 
