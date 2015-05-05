@@ -40,13 +40,9 @@ in the fifth, and vice versa.
 
 The graphs are taken from the [UFL dataset](http://www.cise.ufl.edu/research/sparse/matrices/).
 
-# install
+# todo
 
-With [npm](https://npmjs.org) do:
-
-```
-npm install mugrem
-```
+Consider using PCA for projecting multidimensional layouts to 3d
 
 # license
 
